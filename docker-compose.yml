@@ -3,19 +3,30 @@ version: '3.8'
 services:
   traefik:
     image: traefik:v3.0
+    container_name: renderlite-traefik
     command:
       - "--api.insecure=true"
+      - "--api.dashboard=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=renderlite-network"
       - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
     ports:
       - "80:80"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - renderlite-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.renderlite.local`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
 
   postgres:
     image: postgres:15-alpine
+    container_name: renderlite-postgres
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -24,11 +35,34 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - renderlite-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d renderlite"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
+    container_name: renderlite-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - renderlite-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  renderlite-network:
+    name: renderlite-network
+    driver: bridge
 
 volumes:
   postgres_data:
+  redis_data:

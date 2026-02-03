@@ -50,7 +50,7 @@ model Service {
   name        String
   repoUrl     String
   branch      String        @default("main")
-  runtime     String        // node | python | docker
+  runtime     String      
   subdomain   String        @unique
   status      ServiceStatus @default(CREATED)
   createdAt   DateTime      @default(now())
