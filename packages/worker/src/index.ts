@@ -4,8 +4,12 @@ import { QUEUES, type DeploymentJobData, type DeploymentJobResult } from '@rende
 import { redis } from './lib/redis.js';
 import { prisma } from './lib/prisma.js';
 import { processDeployment } from './jobs/deployment.js';
+import { runAllCleanupTasks } from './jobs/cleanup.js';
 
 dotenv.config();
+
+// Run cleanup tasks every hour
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 console.log('🔧 Starting RenderLite Worker...');
 
@@ -102,6 +106,7 @@ buildWorker.on('error', (err) => {
 // Graceful shutdown
 const shutdown = async () => {
   console.log('\n🛑 Shutting down worker...');
+  clearInterval(cleanupInterval);
   await buildWorker.close();
   await prisma.$disconnect();
   await redis.quit();
@@ -112,4 +117,19 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
+// Schedule cleanup tasks
+const cleanupInterval = setInterval(async () => {
+  try {
+    await runAllCleanupTasks();
+  } catch (error) {
+    console.error('Cleanup task failed:', error);
+  }
+}, CLEANUP_INTERVAL_MS);
+
+// Run initial cleanup after startup
+setTimeout(() => {
+  runAllCleanupTasks().catch(console.error);
+}, 10000);
+
 console.log('✅ Worker started, listening for jobs...');
+console.log(`🔄 Cleanup tasks scheduled every ${CLEANUP_INTERVAL_MS / 1000 / 60} minutes`);

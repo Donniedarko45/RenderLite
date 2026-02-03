@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Prisma
+packages/api/prisma/migrations/
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Docker volumes (local)
+postgres_data/
+redis_data/
+
+# Generated files
+packages/api/src/generated/
+
+# Vite
+packages/frontend/.vite/
