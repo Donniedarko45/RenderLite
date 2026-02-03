@@ -1,0 +1,40 @@
+# Traefik Dynamic Configuration
+# This file can be used for additional routing rules
+
+http:
+  middlewares:
+    # Rate limiting middleware
+    rateLimit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+    # Security headers
+    securityHeaders:
+      headers:
+        frameDeny: true
+        sslRedirect: false
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+
+    # CORS middleware
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowOriginList:
+          - "http://localhost:5173"
+          - "http://localhost:3001"
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+        accessControlMaxAge: 100
+        addVaryHeader: true

@@ -1,0 +1,25 @@
+{
+  "name": "@renderlite/worker",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.9.1",
+    "@renderlite/shared": "*",
+    "bullmq": "^5.1.1",
+    "dockerode": "^4.0.2",
+    "dotenv": "^16.4.1",
+    "ioredis": "^5.3.2",
+    "simple-git": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.23",
+    "@types/node": "^20.11.16",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
