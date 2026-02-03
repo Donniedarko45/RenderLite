@@ -1,0 +1,24 @@
+{
+  "name": "renderlite",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:worker\"",
+    "dev:api": "npm run dev -w @renderlite/api",
+    "dev:worker": "npm run dev -w @renderlite/worker",
+    "dev:frontend": "npm run dev -w @renderlite/frontend",
+    "build": "npm run build --workspaces",
+    "db:generate": "npm run db:generate -w @renderlite/api",
+    "db:push": "npm run db:push -w @renderlite/api",
+    "db:migrate": "npm run db:migrate -w @renderlite/api",
+    "docker:up": "docker compose up -d postgres redis traefik",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}
