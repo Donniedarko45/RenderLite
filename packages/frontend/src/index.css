@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Log viewer styles */
+.log-viewer {
+  @apply font-mono text-sm bg-gray-900 text-gray-100 p-4 rounded-lg overflow-auto;
+  max-height: 500px;
+}
+
+.log-viewer .log-line {
+  @apply whitespace-pre-wrap break-all;
+}
+
+.log-viewer .log-line.error {
+  @apply text-red-400;
+}
+
+.log-viewer .log-line.success {
+  @apply text-green-400;
+}
+
+.log-viewer .log-line.warning {
+  @apply text-yellow-400;
+}

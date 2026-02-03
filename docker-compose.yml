@@ -5,24 +5,22 @@ services:
     image: traefik:v3.0
     container_name: renderlite-traefik
     command:
-      - "--api.insecure=true"
-      - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=renderlite-network"
-      - "--entrypoints.web.address=:80"
-      - "--log.level=INFO"
+      - "--configFile=/etc/traefik/traefik.yml"
     ports:
       - "80:80"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik_logs:/var/log/traefik
     networks:
       - renderlite-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard.rule=Host(`traefik.renderlite.local`)"
       - "traefik.http.routers.dashboard.service=api@internal"
+    restart: unless-stopped
 
   postgres:
     image: postgres:15-alpine
@@ -66,3 +64,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  traefik_logs:
