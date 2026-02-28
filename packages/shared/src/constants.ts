@@ -10,6 +10,11 @@ export const REDIS_KEYS = {
   SERVICE_METRICS: (serviceId: string) => `service:${serviceId}:metrics`,
 } as const;
 
+// Redis pub/sub channels
+export const REDIS_CHANNELS = {
+  REALTIME_EVENTS: 'renderlite:realtime:events',
+} as const;
+
 // Docker labels for Traefik
 export const DOCKER_LABELS = {
   TRAEFIK_ENABLE: 'traefik.enable',

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
+import { disconnectSocket } from '../api/socket';
 
 interface User {
   id: string;
@@ -33,10 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      setIsLoading(true);
       const response = await api.get('/auth/me');
       setUser(response.data);
     } catch (error) {
       // Token is invalid, clear it
+      disconnectSocket();
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
@@ -50,11 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchUser]);
 
   const login = useCallback((newToken: string) => {
+    setIsLoading(true);
     localStorage.setItem('token', newToken);
     setToken(newToken);
   }, []);
 
   const logout = useCallback(() => {
+    disconnectSocket();
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);

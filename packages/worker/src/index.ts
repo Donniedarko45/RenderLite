@@ -1,6 +1,14 @@
 import { Worker } from 'bullmq';
 import dotenv from 'dotenv';
-import { QUEUES, type DeploymentJobData, type DeploymentJobResult } from '@renderlite/shared';
+import {
+  DeploymentStatus,
+  QUEUES,
+  REDIS_CHANNELS,
+  ServiceStatus,
+  type DeploymentJobData,
+  type DeploymentJobResult,
+  type RealtimeEvent,
+} from '@renderlite/shared';
 import { redis } from './lib/redis.js';
 import { prisma } from './lib/prisma.js';
 import { processDeployment } from './jobs/deployment.js';
@@ -13,6 +21,37 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 console.log('🔧 Starting RenderLite Worker...');
 
+async function publishRealtimeEvent(event: RealtimeEvent): Promise<void> {
+  try {
+    await redis.publish(REDIS_CHANNELS.REALTIME_EVENTS, JSON.stringify(event));
+  } catch (error) {
+    console.error('Failed to publish realtime event:', error);
+  }
+}
+
+async function publishDeploymentStatus(
+  deploymentId: string,
+  status: DeploymentStatus,
+  containerId?: string
+): Promise<void> {
+  await publishRealtimeEvent({
+    type: 'deployment:status',
+    deploymentId,
+    status,
+    containerId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+async function publishServiceStatus(serviceId: string, status: ServiceStatus): Promise<void> {
+  await publishRealtimeEvent({
+    type: 'service:status',
+    serviceId,
+    status,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 // Build queue worker
 const buildWorker = new Worker<DeploymentJobData, DeploymentJobResult>(
   QUEUES.BUILD,
@@ -23,9 +62,18 @@ const buildWorker = new Worker<DeploymentJobData, DeploymentJobResult>(
     console.log(`   Branch: ${job.data.branch}`);
 
     try {
+      await publishDeploymentStatus(job.data.deploymentId, DeploymentStatus.BUILDING);
+      await publishServiceStatus(job.data.serviceId, ServiceStatus.DEPLOYING);
+
       const result = await processDeployment(job.data, (log) => {
         // Log progress updates
-        job.log(log);
+        void job.log(log);
+        void publishRealtimeEvent({
+          type: 'deployment:log',
+          deploymentId: job.data.deploymentId,
+          log,
+          timestamp: new Date().toISOString(),
+        });
         console.log(`   ${log}`);
       });
 
@@ -47,8 +95,30 @@ const buildWorker = new Worker<DeploymentJobData, DeploymentJobResult>(
 
 // Event handlers
 buildWorker.on('completed', async (job, result) => {
+  if (!result.success) {
+    console.log(`⚠️ Job ${job.id} completed with failed build result`);
+    const failureLog = result.logs || `Deployment failed: ${result.error || 'Unknown error'}`;
+    await prisma.deployment.update({
+      where: { id: job.data.deploymentId },
+      data: {
+        status: DeploymentStatus.FAILED,
+        logs: failureLog,
+        finishedAt: new Date(),
+      },
+    });
+
+    await prisma.service.update({
+      where: { id: job.data.serviceId },
+      data: { status: ServiceStatus.FAILED },
+    });
+
+    await publishDeploymentStatus(job.data.deploymentId, DeploymentStatus.FAILED);
+    await publishServiceStatus(job.data.serviceId, ServiceStatus.FAILED);
+    return;
+  }
+
   console.log(`✅ Job ${job.id} completed successfully`);
-  
+
   if (result.containerId) {
     console.log(`   Container ID: ${result.containerId}`);
   }
@@ -57,7 +127,7 @@ buildWorker.on('completed', async (job, result) => {
   await prisma.deployment.update({
     where: { id: job.data.deploymentId },
     data: {
-      status: 'SUCCESS',
+      status: DeploymentStatus.SUCCESS,
       logs: result.logs,
       finishedAt: new Date(),
     },
@@ -67,10 +137,17 @@ buildWorker.on('completed', async (job, result) => {
   await prisma.service.update({
     where: { id: job.data.serviceId },
     data: {
-      status: 'RUNNING',
+      status: ServiceStatus.RUNNING,
       containerId: result.containerId,
     },
   });
+
+  await publishDeploymentStatus(
+    job.data.deploymentId,
+    DeploymentStatus.SUCCESS,
+    result.containerId
+  );
+  await publishServiceStatus(job.data.serviceId, ServiceStatus.RUNNING);
 });
 
 buildWorker.on('failed', async (job, error) => {
@@ -81,7 +158,7 @@ buildWorker.on('failed', async (job, error) => {
     await prisma.deployment.update({
       where: { id: job.data.deploymentId },
       data: {
-        status: 'FAILED',
+        status: DeploymentStatus.FAILED,
         logs: `Deployment failed: ${error.message}`,
         finishedAt: new Date(),
       },
@@ -90,8 +167,11 @@ buildWorker.on('failed', async (job, error) => {
     // Update service status
     await prisma.service.update({
       where: { id: job.data.serviceId },
-      data: { status: 'FAILED' },
+      data: { status: ServiceStatus.FAILED },
     });
+
+    await publishDeploymentStatus(job.data.deploymentId, DeploymentStatus.FAILED);
+    await publishServiceStatus(job.data.serviceId, ServiceStatus.FAILED);
   }
 });
 

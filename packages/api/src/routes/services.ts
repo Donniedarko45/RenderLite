@@ -3,8 +3,58 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateSubdomain } from '../utils/subdomain.js';
+import { encryptEnvVars } from '../utils/encryption.js';
+import Docker from 'dockerode';
 
 export const serviceRouter = Router();
+const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+
+function normalizeAndEncryptEnvVars(rawEnvVars: unknown): Record<string, string> | null {
+  if (rawEnvVars === null || rawEnvVars === undefined) {
+    return null;
+  }
+
+  if (typeof rawEnvVars !== 'object' || Array.isArray(rawEnvVars)) {
+    throw new AppError('envVars must be a key-value object', 400);
+  }
+
+  const envVars = Object.entries(rawEnvVars as Record<string, unknown>).reduce(
+    (acc, [key, value]) => {
+      if (typeof key !== 'string' || !key.trim()) {
+        return acc;
+      }
+      acc[key.trim()] = value === undefined || value === null ? '' : String(value);
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+
+  if (Object.keys(envVars).length === 0) {
+    return null;
+  }
+
+  try {
+    return encryptEnvVars(envVars);
+  } catch (error) {
+    throw new AppError('Failed to encrypt environment variables', 500);
+  }
+}
+
+function maskEnvVars(rawEnvVars: unknown): Record<string, string> | null {
+  if (!rawEnvVars || typeof rawEnvVars !== 'object' || Array.isArray(rawEnvVars)) {
+    return null;
+  }
+
+  const masked = Object.keys(rawEnvVars as Record<string, unknown>).reduce(
+    (acc, key) => {
+      acc[key] = '********';
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+
+  return Object.keys(masked).length > 0 ? masked : null;
+}
 
 // All routes require authentication
 serviceRouter.use(authenticate);
@@ -32,7 +82,12 @@ serviceRouter.get('/', async (req: AuthRequest, res, next) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(services);
+    res.json(
+      services.map((service) => ({
+        ...service,
+        envVars: maskEnvVars(service.envVars),
+      }))
+    );
   } catch (error) {
     next(error);
   }
@@ -63,7 +118,10 @@ serviceRouter.get('/:id', async (req: AuthRequest, res, next) => {
       throw new AppError('Service not found', 404);
     }
 
-    res.json(service);
+    res.json({
+      ...service,
+      envVars: maskEnvVars(service.envVars),
+    });
   } catch (error) {
     next(error);
   }
@@ -100,6 +158,9 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
     // Generate unique subdomain
     const subdomain = await generateSubdomain(name);
 
+    const encryptedEnvVars =
+      envVars !== undefined ? normalizeAndEncryptEnvVars(envVars) : null;
+
     const service = await prisma.service.create({
       data: {
         name: name.trim(),
@@ -108,7 +169,7 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
         branch: branch || 'main',
         runtime: runtime || null,
         subdomain,
-        envVars: envVars || null,
+        envVars: encryptedEnvVars,
       },
       include: {
         project: {
@@ -117,7 +178,10 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
       },
     });
 
-    res.status(201).json(service);
+    res.status(201).json({
+      ...service,
+      envVars: maskEnvVars(service.envVars),
+    });
   } catch (error) {
     next(error);
   }
@@ -142,13 +206,16 @@ serviceRouter.put('/:id', async (req: AuthRequest, res, next) => {
       throw new AppError('Service not found', 404);
     }
 
+    const encryptedEnvVars =
+      envVars !== undefined ? normalizeAndEncryptEnvVars(envVars) : undefined;
+
     const service = await prisma.service.update({
       where: { id: req.params.id },
       data: {
         ...(name && { name: name.trim() }),
         ...(branch && { branch }),
         ...(runtime !== undefined && { runtime }),
-        ...(envVars !== undefined && { envVars }),
+        ...(envVars !== undefined && { envVars: encryptedEnvVars }),
       },
       include: {
         project: {
@@ -157,7 +224,10 @@ serviceRouter.put('/:id', async (req: AuthRequest, res, next) => {
       },
     });
 
-    res.json(service);
+    res.json({
+      ...service,
+      envVars: maskEnvVars(service.envVars),
+    });
   } catch (error) {
     next(error);
   }
@@ -180,7 +250,23 @@ serviceRouter.delete('/:id', async (req: AuthRequest, res, next) => {
       throw new AppError('Service not found', 404);
     }
 
-    // TODO: Stop and remove container if running
+    if (existing.containerId) {
+      try {
+        const container = docker.getContainer(existing.containerId);
+        try {
+          await container.stop({ t: 10 });
+        } catch (stopError: any) {
+          if (!stopError?.statusCode || stopError.statusCode !== 304) {
+            throw stopError;
+          }
+        }
+        await container.remove({ force: true });
+      } catch (dockerError: any) {
+        if (dockerError?.statusCode !== 404) {
+          throw dockerError;
+        }
+      }
+    }
 
     await prisma.service.delete({
       where: { id: req.params.id },

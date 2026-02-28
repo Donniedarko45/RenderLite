@@ -37,7 +37,28 @@ projectRouter.get('/:id', async (req: AuthRequest, res, next) => {
       },
       include: {
         services: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            projectId: true,
+            repoUrl: true,
+            branch: true,
+            runtime: true,
+            subdomain: true,
+            status: true,
+            containerId: true,
+            createdAt: true,
+            updatedAt: true,
+            deployments: {
+              orderBy: { createdAt: 'desc' },
+              take: 3,
+              select: {
+                id: true,
+                status: true,
+                commitSha: true,
+                createdAt: true,
+              },
+            },
             _count: {
               select: { deployments: true },
             },

@@ -16,6 +16,8 @@ import {
   Clock,
 } from 'lucide-react';
 
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+
 const statusColors: Record<string, string> = {
   CREATED: 'bg-gray-100 text-gray-700',
   DEPLOYING: 'bg-blue-100 text-blue-700',
@@ -146,7 +148,7 @@ export default function ProjectDetail() {
                       </a>
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
-                      {service.subdomain}.renderlite.local
+                      {`${service.subdomain}.${BASE_DOMAIN}`}
                     </p>
                   </div>
                 </div>

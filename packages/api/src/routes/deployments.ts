@@ -4,6 +4,9 @@ import { prisma } from '../lib/prisma.js';
 import { buildQueue } from '../lib/queue.js';
 import { AppError } from '../middleware/errorHandler.js';
 import type { DeploymentJobData } from '@renderlite/shared';
+import { DeploymentStatus, ServiceStatus } from '@renderlite/shared';
+import { decryptEnvVars } from '../utils/encryption.js';
+import type { SocketHandlers } from '../socket/index.js';
 
 export const deploymentRouter = Router();
 
@@ -95,20 +98,20 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
     const deployment = await prisma.deployment.create({
       data: {
         serviceId,
-        status: 'QUEUED',
+        status: DeploymentStatus.QUEUED,
       },
     });
 
     // Update service status
     await prisma.service.update({
       where: { id: serviceId },
-      data: { status: 'DEPLOYING' },
+      data: { status: ServiceStatus.DEPLOYING },
     });
 
     // Parse env vars from JSON
     let envVars: Record<string, string> | undefined;
     if (service.envVars) {
-      envVars = service.envVars as Record<string, string>;
+      envVars = decryptEnvVars(service.envVars as Record<string, string>);
     }
 
     // Add job to queue
@@ -124,6 +127,10 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
     await buildQueue.add(`deploy-${deployment.id}`, jobData, {
       jobId: deployment.id,
     });
+
+    const socketHandlers = req.app.get('socketHandlers') as SocketHandlers | undefined;
+    socketHandlers?.emitDeploymentStatus(deployment.id, DeploymentStatus.QUEUED);
+    socketHandlers?.emitServiceStatus(service.id, ServiceStatus.DEPLOYING);
 
     res.status(201).json(deployment);
   } catch (error) {
@@ -182,7 +189,7 @@ deploymentRouter.post('/:id/cancel', async (req: AuthRequest, res, next) => {
       throw new AppError('Deployment not found', 404);
     }
 
-    if (deployment.status !== 'QUEUED') {
+    if (deployment.status !== DeploymentStatus.QUEUED) {
       throw new AppError('Can only cancel queued deployments', 400);
     }
 
@@ -195,8 +202,21 @@ deploymentRouter.post('/:id/cancel', async (req: AuthRequest, res, next) => {
     // Update status
     await prisma.deployment.update({
       where: { id: deployment.id },
-      data: { status: 'FAILED', logs: 'Deployment cancelled by user' },
+      data: {
+        status: DeploymentStatus.FAILED,
+        logs: 'Deployment cancelled by user',
+        finishedAt: new Date(),
+      },
     });
+
+    await prisma.service.update({
+      where: { id: deployment.serviceId },
+      data: { status: ServiceStatus.FAILED },
+    });
+
+    const socketHandlers = req.app.get('socketHandlers') as SocketHandlers | undefined;
+    socketHandlers?.emitDeploymentStatus(deployment.id, DeploymentStatus.FAILED);
+    socketHandlers?.emitServiceStatus(deployment.serviceId, ServiceStatus.FAILED);
 
     res.json({ message: 'Deployment cancelled' });
   } catch (error) {

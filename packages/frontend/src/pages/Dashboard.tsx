@@ -27,46 +27,42 @@ export default function Dashboard() {
       name: 'Projects',
       value: overview?.projects || 0,
       icon: FolderKanban,
-      color: 'bg-blue-500',
     },
     {
       name: 'Services',
       value: overview?.services || 0,
       icon: Server,
-      color: 'bg-purple-500',
     },
     {
       name: 'Running',
       value: overview?.runningServices || 0,
       icon: Activity,
-      color: 'bg-green-500',
     },
     {
       name: 'Deployments',
       value: Object.values(overview?.deployments || {}).reduce((a: number, b: any) => a + b, 0),
       icon: CheckCircle,
-      color: 'bg-orange-500',
     },
   ];
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'SUCCESS':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-5 h-5 text-[#00ff00]" />; // Neon Green
       case 'FAILED':
-        return <XCircle className="w-5 h-5 text-red-500" />;
+        return <XCircle className="w-5 h-5 text-[#ff003c]" />; // Neon Red
       case 'BUILDING':
-        return <Activity className="w-5 h-5 text-blue-500 animate-pulse" />;
+        return <Activity className="w-5 h-5 text-[#0070f3] animate-pulse" />; // Vibrant Blue
       default:
-        return <Clock className="w-5 h-5 text-gray-400" />;
+        return <Clock className="w-5 h-5 text-gray-500" />;
     }
   };
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Overview of your deployments and services</p>
+        <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
+        <p className="text-gray-400 mt-2">Overview of your deployments and services</p>
       </div>
 
       {/* Stats Grid */}
@@ -74,17 +70,17 @@ export default function Dashboard() {
         {stats.map((stat) => (
           <div
             key={stat.name}
-            className="bg-white rounded-xl shadow-sm p-6 border border-gray-100"
+            className="bg-[#111] rounded-xl p-6 border border-white/10 hover:border-white/20 transition-colors"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">{stat.name}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
+                <p className="text-sm font-medium text-gray-400">{stat.name}</p>
+                <p className="text-3xl font-bold text-white mt-2">
                   {overviewLoading ? '-' : stat.value}
                 </p>
               </div>
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="w-6 h-6 text-white" />
+              <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                <stat.icon className="w-5 h-5 text-gray-300" />
               </div>
             </div>
           </div>
@@ -92,22 +88,22 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Deployments */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Deployments</h2>
+      <div className="bg-[#111] rounded-xl border border-white/10 overflow-hidden">
+        <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between bg-[#0a0a0a]">
+          <h2 className="text-lg font-semibold text-white">Recent Deployments</h2>
           <Link
             to="/projects"
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center"
+            className="text-sm text-gray-400 hover:text-white flex items-center transition-colors"
           >
             View all
             <ArrowRight className="w-4 h-4 ml-1" />
           </Link>
         </div>
-        <div className="divide-y">
+        <div className="divide-y divide-white/5">
           {deploymentsLoading ? (
-            <div className="p-6 text-center text-gray-500">Loading...</div>
+            <div className="p-8 text-center text-gray-500 font-medium">Loading...</div>
           ) : recentDeployments?.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
+            <div className="p-8 text-center text-gray-500">
               No deployments yet. Create a service to get started!
             </div>
           ) : (
@@ -115,20 +111,20 @@ export default function Dashboard() {
               <Link
                 key={deployment.id}
                 to={`/deployments/${deployment.id}`}
-                className="flex items-center px-6 py-4 hover:bg-gray-50 transition-colors"
+                className="flex items-center px-6 py-4 hover:bg-white/5 transition-colors group"
               >
                 {getStatusIcon(deployment.status)}
                 <div className="ml-4 flex-1">
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
                     {deployment.service?.name}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 font-mono mt-0.5">
                     {deployment.commitSha?.substring(0, 7) || 'No commit'}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-900">{deployment.status}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm font-medium text-gray-300">{deployment.status}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {new Date(deployment.createdAt).toLocaleString()}
                   </p>
                 </div>

@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "typecheck": "tsc --noEmit",
+    "start": "dotenv -e ../../.env -- node dist/index.js",
+    "db:generate": "dotenv -e ../../.env -- prisma generate",
+    "db:push": "dotenv -e ../../.env -- prisma db push",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "db:studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^5.9.1",
+    "@prisma/client": "^6.14.0",
     "@renderlite/shared": "*",
     "bullmq": "^5.1.1",
     "cors": "^2.8.5",
@@ -34,7 +35,8 @@
     "@types/node": "^20.11.16",
     "@types/passport": "^1.0.16",
     "@types/passport-github2": "^1.2.9",
-    "prisma": "^5.9.1",
+    "dotenv-cli": "^11.0.0",
+    "prisma": "^6.14.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

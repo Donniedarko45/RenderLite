@@ -13,6 +13,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+
 const statusColors: Record<string, string> = {
   QUEUED: 'bg-gray-100 text-gray-700',
   BUILDING: 'bg-blue-100 text-blue-700',
@@ -84,10 +86,9 @@ export default function DeploymentDetail() {
     return logs.split('\n').filter((line) => line.trim());
   };
 
-  const allLogs = [
-    ...formatLogs(logsData?.logs || ''),
-    ...liveLogs,
-  ];
+  const allLogs = Array.from(
+    new Set([...formatLogs(logsData?.logs || ''), ...liveLogs])
+  );
 
   const getLogLineClass = (line: string) => {
     if (line.includes('❌') || line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')) {
@@ -155,9 +156,9 @@ export default function DeploymentDetail() {
           </div>
           <div className="flex items-center space-x-4">
             {statusIcons[currentStatus || deployment.status]}
-            {deployment.status === 'SUCCESS' && (
+            {(currentStatus || deployment.status) === 'SUCCESS' && (
               <a
-                href={`http://${deployment.service.subdomain}.renderlite.local`}
+                href={`http://${deployment.service.subdomain}.${BASE_DOMAIN}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
