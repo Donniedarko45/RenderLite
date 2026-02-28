@@ -28,22 +28,22 @@ export async function processDeployment(
       data: { status: 'BUILDING', startedAt: new Date() },
     });
 
-    appendLog('🚀 Starting deployment...');
+    appendLog('==> Starting deployment...');
     appendLog(`📂 Work directory: ${workDir}`);
 
     // Create work directory
     await fs.mkdir(workDir, { recursive: true });
 
     // Step 1: Clone repository
-    appendLog(`\n📥 Cloning repository: ${data.repoUrl}`);
+    appendLog(`\n==> Cloning repository: ${data.repoUrl}`);
     appendLog(`   Branch: ${data.branch}`);
     
     await cloneRepository(data.repoUrl, data.branch, workDir);
-    appendLog('✅ Repository cloned successfully');
+    appendLog('    Done: Repository cloned successfully');
 
     // Get commit SHA
     const commitSha = await getLatestCommitSha(workDir);
-    appendLog(`📌 Commit: ${commitSha.substring(0, 7)}`);
+    appendLog(`    Info: Commit: ${commitSha.substring(0, 7)}`);
     
     await prisma.deployment.update({
       where: { id: data.deploymentId },
@@ -52,7 +52,7 @@ export async function processDeployment(
 
     // Step 2: Detect build method and build image
     const imageName = `renderlite-${data.subdomain}:${commitSha.substring(0, 7)}`;
-    appendLog(`\n🔨 Building image: ${imageName}`);
+    appendLog(`\n==> Building image: ${imageName}`);
 
     const hasDockerfile = await fileExists(path.join(workDir, 'Dockerfile'));
     
@@ -60,11 +60,11 @@ export async function processDeployment(
       appendLog('📄 Dockerfile detected, using Docker build');
       await buildWithDockerfile(workDir, imageName, appendLog);
     } else {
-      appendLog('🔧 No Dockerfile found, using Nixpacks');
+      appendLog('    Info: No Dockerfile found, using Nixpacks');
       await buildWithNixpacks(workDir, imageName, appendLog);
     }
 
-    appendLog('✅ Image built successfully');
+    appendLog('    Done: Image built successfully');
 
     // Step 3: Stop existing container if any
     const existingService = await prisma.service.findUnique({
@@ -76,14 +76,14 @@ export async function processDeployment(
       appendLog(`\n🛑 Stopping existing container: ${existingService.containerId.substring(0, 12)}`);
       try {
         await stopContainer(existingService.containerId);
-        appendLog('✅ Old container stopped');
+        appendLog('    Done: Old container stopped');
       } catch (error) {
-        appendLog('⚠️ Could not stop old container (may already be stopped)');
+        appendLog('    Warn: Could not stop old container (may already be stopped)');
       }
     }
 
     // Step 4: Run new container
-    appendLog(`\n🐳 Starting container...`);
+    appendLog(`\n==> Starting container...`);
     
     const containerId = await runContainer({
       imageName,
@@ -91,7 +91,7 @@ export async function processDeployment(
       envVars: data.envVars,
     });
 
-    appendLog(`✅ Container started: ${containerId.substring(0, 12)}`);
+    appendLog(`    Done: Container started: ${containerId.substring(0, 12)}`);
     appendLog(`\n🌐 Service available at: http://${data.subdomain}.${process.env.BASE_DOMAIN || 'renderlite.local'}`);
 
     // Cleanup work directory
@@ -104,7 +104,7 @@ export async function processDeployment(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    appendLog(`\n❌ Deployment failed: ${errorMessage}`);
+    appendLog(`\n[ERROR] Deployment failed: ${errorMessage}`);
 
     // Cleanup on error
     try {

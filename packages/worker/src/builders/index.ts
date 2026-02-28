@@ -24,7 +24,7 @@ async function runNixpacksBuild(command: string, log: LogCallback): Promise<void
   }
 
   if (stderr && !stderr.toLowerCase().includes('warning')) {
-    log(`   ⚠️ ${stderr}`);
+    log(`   [WARN] ${stderr}`);
   }
 }
 
@@ -60,7 +60,7 @@ export async function buildWithNixpacks(
       throw new Error(`Nixpacks build failed: ${error.message}`);
     }
 
-    log('   ⚠️ Local nixpacks not found, using Dockerized Nixpacks fallback');
+    log('   [WARN] Local nixpacks not found, using Dockerized Nixpacks fallback');
     const dockerizedCommand = [
       'docker run --rm',
       '-v /var/run/docker.sock:/var/run/docker.sock',
@@ -131,7 +131,7 @@ export async function buildWithDockerfile(
             }
           }
           if (event.error) {
-            log(`   ❌ ${event.error}`);
+            log(`   [ERROR] ${event.error}`);
           }
         }
       );
