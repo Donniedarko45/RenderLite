@@ -102,16 +102,16 @@ export default function DeploymentDetail() {
   );
 
   const getLogLineClass = (line: string) => {
-    if (line.includes('❌') || line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')) {
+    if (line.includes('[ERROR]') || line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')) {
       return 'text-[#ff5f56]';
     }
-    if (line.includes('✅') || line.toLowerCase().includes('success')) {
+    if (line.includes('Done:') || line.toLowerCase().includes('success')) {
       return 'text-[#27c93f]';
     }
-    if (line.includes('⚠️') || line.toLowerCase().includes('warning')) {
+    if (line.includes('[WARN]') || line.toLowerCase().includes('warning')) {
       return 'text-[#ffbd2e]';
     }
-    if (line.includes('🚀') || line.includes('📦') || line.includes('📥') || line.includes('🔨') || line.includes('🐳')) {
+    if (line.includes('==>') || line.includes('Info:')) {
       return 'text-[#3b82f6]';
     }
     if (line.includes('STEP')) {
