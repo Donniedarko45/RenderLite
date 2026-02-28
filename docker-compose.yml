@@ -6,12 +6,14 @@ services:
       - "--configFile=/etc/traefik/traefik.yml"
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - traefik_logs:/var/log/traefik
+      - acme_data:/acme
     networks:
       - renderlite-network
     labels:
@@ -63,3 +65,4 @@ volumes:
   postgres_data:
   redis_data:
   traefik_logs:
+  acme_data:

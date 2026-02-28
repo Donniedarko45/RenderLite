@@ -8,6 +8,8 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import ServiceDetail from './pages/ServiceDetail';
 import DeploymentDetail from './pages/DeploymentDetail';
+import Organizations from './pages/Organizations';
+import OrgDetail from './pages/OrgDetail';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from './components/Tooltip';
 import { Spinner } from './components/Spinner';
@@ -15,14 +17,12 @@ import { useEffect } from 'react';
 import NProgress from 'nprogress';
 import 'nprogress/nprogress.css';
 
-// Configure NProgress styling
 NProgress.configure({ 
   showSpinner: false,
   minimum: 0.1,
   speed: 400
 });
 
-// A component that hooks into the router to show the progress bar on navigation
 function RouteProgress() {
   const location = useLocation();
 
@@ -79,6 +79,8 @@ function App() {
           <Route path="projects/:projectId" element={<ProjectDetail />} />
           <Route path="services/:serviceId" element={<ServiceDetail />} />
           <Route path="deployments/:deploymentId" element={<DeploymentDetail />} />
+          <Route path="organizations" element={<Organizations />} />
+          <Route path="organizations/:orgId" element={<OrgDetail />} />
         </Route>
       </Routes>
     </TooltipProvider>

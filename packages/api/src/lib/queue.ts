@@ -18,3 +18,16 @@ export const buildQueue = new Queue(QUEUES.BUILD, {
 export const cleanupQueue = new Queue(QUEUES.CLEANUP, {
   connection: redis,
 });
+
+export const rollbackQueue = new Queue(QUEUES.ROLLBACK, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: {
+      type: 'exponential',
+      delay: 1000,
+    },
+    removeOnComplete: 100,
+    removeOnFail: 50,
+  },
+});

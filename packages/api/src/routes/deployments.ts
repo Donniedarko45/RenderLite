@@ -1,19 +1,18 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
-import { buildQueue } from '../lib/queue.js';
+import { buildQueue, rollbackQueue } from '../lib/queue.js';
 import { AppError } from '../middleware/errorHandler.js';
-import type { DeploymentJobData } from '@renderlite/shared';
+import type { DeploymentJobData, RollbackJobData } from '@renderlite/shared';
 import { DeploymentStatus, ServiceStatus } from '@renderlite/shared';
-import { decryptEnvVars } from '../utils/encryption.js';
+import { decryptEnvVars, decrypt } from '../utils/encryption.js';
 import type { SocketHandlers } from '../socket/index.js';
 
 export const deploymentRouter = Router();
 
-// All routes require authentication
 deploymentRouter.use(authenticate);
 
-// List deployments (optionally filter by service)
+// List deployments
 deploymentRouter.get('/', async (req: AuthRequest, res, next) => {
   try {
     const { serviceId } = req.query;
@@ -71,6 +70,46 @@ deploymentRouter.get('/:id', async (req: AuthRequest, res, next) => {
   }
 });
 
+/**
+ * Helper: build job data for a deployment, including token and health check config
+ */
+async function buildDeploymentJobData(
+  service: any,
+  deploymentId: string,
+  userId: string
+): Promise<DeploymentJobData> {
+  let envVars: Record<string, string> | undefined;
+  if (service.envVars) {
+    envVars = decryptEnvVars(service.envVars as Record<string, string>);
+  }
+
+  let githubToken: string | undefined;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { githubAccessToken: true },
+  });
+  if (user?.githubAccessToken) {
+    try {
+      githubToken = decrypt(user.githubAccessToken);
+    } catch {
+      // token not available or corrupted
+    }
+  }
+
+  return {
+    deploymentId,
+    serviceId: service.id,
+    repoUrl: service.repoUrl,
+    branch: service.branch,
+    subdomain: service.subdomain,
+    envVars,
+    githubToken,
+    healthCheckPath: service.healthCheckPath ?? undefined,
+    healthCheckInterval: service.healthCheckInterval,
+    healthCheckTimeout: service.healthCheckTimeout,
+  };
+}
+
 // Trigger new deployment
 deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
   try {
@@ -80,7 +119,6 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
       throw new AppError('serviceId is required', 400);
     }
 
-    // Verify service ownership
     const service = await prisma.service.findFirst({
       where: {
         id: serviceId,
@@ -94,7 +132,6 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
       throw new AppError('Service not found', 404);
     }
 
-    // Create deployment record
     const deployment = await prisma.deployment.create({
       data: {
         serviceId,
@@ -102,27 +139,12 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
       },
     });
 
-    // Update service status
     await prisma.service.update({
       where: { id: serviceId },
       data: { status: ServiceStatus.DEPLOYING },
     });
 
-    // Parse env vars from JSON
-    let envVars: Record<string, string> | undefined;
-    if (service.envVars) {
-      envVars = decryptEnvVars(service.envVars as Record<string, string>);
-    }
-
-    // Add job to queue
-    const jobData: DeploymentJobData = {
-      deploymentId: deployment.id,
-      serviceId: service.id,
-      repoUrl: service.repoUrl,
-      branch: service.branch,
-      subdomain: service.subdomain,
-      envVars,
-    };
+    const jobData = await buildDeploymentJobData(service, deployment.id, req.user!.id);
 
     await buildQueue.add(`deploy-${deployment.id}`, jobData, {
       jobId: deployment.id,
@@ -171,7 +193,7 @@ deploymentRouter.get('/:id/logs', async (req: AuthRequest, res, next) => {
   }
 });
 
-// Cancel deployment (if still queued)
+// Cancel deployment
 deploymentRouter.post('/:id/cancel', async (req: AuthRequest, res, next) => {
   try {
     const deployment = await prisma.deployment.findFirst({
@@ -193,13 +215,11 @@ deploymentRouter.post('/:id/cancel', async (req: AuthRequest, res, next) => {
       throw new AppError('Can only cancel queued deployments', 400);
     }
 
-    // Remove from queue
     const job = await buildQueue.getJob(deployment.id);
     if (job) {
       await job.remove();
     }
 
-    // Update status
     await prisma.deployment.update({
       where: { id: deployment.id },
       data: {
@@ -219,6 +239,81 @@ deploymentRouter.post('/:id/cancel', async (req: AuthRequest, res, next) => {
     socketHandlers?.emitServiceStatus(deployment.serviceId, ServiceStatus.FAILED);
 
     res.json({ message: 'Deployment cancelled' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Rollback to a previous successful deployment
+deploymentRouter.post('/:id/rollback', async (req: AuthRequest, res, next) => {
+  try {
+    const targetDeployment = await prisma.deployment.findFirst({
+      where: {
+        id: req.params.id,
+        service: {
+          project: {
+            userId: req.user!.id,
+          },
+        },
+      },
+      include: {
+        service: true,
+      },
+    });
+
+    if (!targetDeployment) {
+      throw new AppError('Deployment not found', 404);
+    }
+
+    if (targetDeployment.status !== DeploymentStatus.SUCCESS) {
+      throw new AppError('Can only rollback to successful deployments', 400);
+    }
+
+    if (!targetDeployment.imageTag) {
+      throw new AppError('Deployment has no image tag -- cannot rollback', 400);
+    }
+
+    const service = targetDeployment.service;
+
+    const newDeployment = await prisma.deployment.create({
+      data: {
+        serviceId: service.id,
+        status: DeploymentStatus.QUEUED,
+        commitSha: targetDeployment.commitSha,
+        imageTag: targetDeployment.imageTag,
+      },
+    });
+
+    await prisma.service.update({
+      where: { id: service.id },
+      data: { status: ServiceStatus.DEPLOYING },
+    });
+
+    let envVars: Record<string, string> | undefined;
+    if (service.envVars) {
+      envVars = decryptEnvVars(service.envVars as Record<string, string>);
+    }
+
+    const rollbackData: RollbackJobData = {
+      deploymentId: newDeployment.id,
+      serviceId: service.id,
+      subdomain: service.subdomain,
+      imageTag: targetDeployment.imageTag,
+      envVars,
+      healthCheckPath: service.healthCheckPath ?? undefined,
+      healthCheckInterval: service.healthCheckInterval,
+      healthCheckTimeout: service.healthCheckTimeout,
+    };
+
+    await rollbackQueue.add(`rollback-${newDeployment.id}`, rollbackData, {
+      jobId: newDeployment.id,
+    });
+
+    const socketHandlers = req.app.get('socketHandlers') as SocketHandlers | undefined;
+    socketHandlers?.emitDeploymentStatus(newDeployment.id, DeploymentStatus.QUEUED);
+    socketHandlers?.emitServiceStatus(service.id, ServiceStatus.DEPLOYING);
+
+    res.status(201).json(newDeployment);
   } catch (error) {
     next(error);
   }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { servicesApi, deploymentsApi, metricsApi } from '../api/client';
+import { servicesApi, deploymentsApi, metricsApi, domainsApi } from '../api/client';
 import { subscribeToService } from '../api/socket';
 import { PageTransition } from '../components/PageTransition';
 import { AnimatedCard } from '../components/AnimatedCard';
@@ -22,6 +22,14 @@ import {
   EyeOff,
   Copy,
   ChevronRight,
+  Globe,
+  Webhook,
+  HeartPulse,
+  Trash2,
+  RotateCcw,
+  Plus,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   XAxis,
@@ -260,6 +268,8 @@ export default function ServiceDetail() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
+          <TabsTrigger value="domains">Domains</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -360,38 +370,118 @@ export default function ServiceDetail() {
             ) : (
               <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
                 {service.deployments?.map((deployment: any) => (
-                  <Link
-                    key={deployment.id}
-                    to={`/deployments/${deployment.id}`}
-                    className="flex items-center justify-between p-4 bg-black border border-white/5 hover:border-white/20 rounded-xl transition-all duration-300 group hover:bg-white/[0.02]"
-                  >
-                    <div className="flex items-center">
+                  <div key={deployment.id} className="flex items-center justify-between p-4 bg-black border border-white/5 hover:border-white/20 rounded-xl transition-all duration-300 group hover:bg-white/[0.02]">
+                    <Link to={`/deployments/${deployment.id}`} className="flex items-center flex-1 min-w-0">
                       {deployment.status === 'SUCCESS' && (
-                        <CheckCircle className="w-5 h-5 text-[#00ff00] mr-4 rounded-full" />
+                        <CheckCircle className="w-5 h-5 text-[#00ff00] mr-4 flex-shrink-0" />
                       )}
                       {deployment.status === 'FAILED' && (
-                        <XCircle className="w-5 h-5 text-[#ff003c] mr-4 rounded-full" />
+                        <XCircle className="w-5 h-5 text-[#ff003c] mr-4 flex-shrink-0" />
                       )}
                       {deployment.status === 'BUILDING' && (
-                        <Activity className="w-5 h-5 text-[#0070f3] mr-4 animate-pulse rounded-full" />
+                        <Activity className="w-5 h-5 text-[#0070f3] mr-4 animate-pulse flex-shrink-0" />
                       )}
                       {deployment.status === 'QUEUED' && (
-                        <Clock className="w-5 h-5 text-gray-500 mr-4" />
+                        <Clock className="w-5 h-5 text-gray-500 mr-4 flex-shrink-0" />
                       )}
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors font-mono">
                           {deployment.commitSha?.substring(0, 7) || 'No commit'}
                         </p>
                         <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider font-semibold">{deployment.status}</p>
                       </div>
+                    </Link>
+                    <div className="flex items-center space-x-3 ml-4 flex-shrink-0">
+                      {deployment.status === 'SUCCESS' && deployment.imageTag && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deploymentsApi.rollback(deployment.id).then(() => {
+                              queryClient.invalidateQueries({ queryKey: ['service', serviceId] });
+                              toast.success('Rollback triggered');
+                            }).catch(() => toast.error('Rollback failed'));
+                          }}
+                          className="flex items-center px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-all opacity-0 group-hover:opacity-100"
+                          title="Rollback to this deployment"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                          Rollback
+                        </button>
+                      )}
+                      <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors whitespace-nowrap">
+                        {new Date(deployment.createdAt).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">
-                      {new Date(deployment.createdAt).toLocaleString()}
-                    </p>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
+          </AnimatedCard>
+        </TabsContent>
+
+        <TabsContent value="domains">
+          <DomainsTab serviceId={serviceId!} />
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <AnimatedCard delay={0.1}>
+            <h2 className="text-xl font-bold text-white mb-6 tracking-tight flex items-center">
+              <Webhook className="w-5 h-5 mr-2 text-gray-400" />
+              Webhook (Auto-Deploy)
+            </h2>
+            {service.webhookUrl ? (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-400">Configure this webhook URL in your GitHub repository settings to auto-deploy on push.</p>
+                <div className="flex items-center space-x-2">
+                  <code className="flex-1 px-4 py-3 bg-black border border-white/10 rounded-xl text-green-400 font-mono text-sm truncate">{service.webhookUrl}</code>
+                  <button onClick={() => { navigator.clipboard.writeText(service.webhookUrl); toast.success('Webhook URL copied'); }} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-gray-400 hover:text-white">
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                {service.webhookSecret && (
+                  <div className="flex items-center space-x-2">
+                    <code className="flex-1 px-4 py-3 bg-black border border-white/10 rounded-xl text-gray-500 font-mono text-sm">Secret: ••••••••••••</code>
+                    <button onClick={() => { navigator.clipboard.writeText(service.webhookSecret); toast.success('Webhook secret copied'); }} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-gray-400 hover:text-white">
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-2">In GitHub: Settings &rarr; Webhooks &rarr; Add webhook. Set content type to <code className="text-gray-400">application/json</code> and paste the secret.</p>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">Webhook not configured for this service.</p>
+            )}
+          </AnimatedCard>
+
+          <AnimatedCard delay={0.2} className="mt-6">
+            <h2 className="text-xl font-bold text-white mb-6 tracking-tight flex items-center">
+              <HeartPulse className="w-5 h-5 mr-2 text-gray-400" />
+              Health Check
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Health Check Path</label>
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="text"
+                    defaultValue={service.healthCheckPath || ''}
+                    placeholder="/health or /api/ping"
+                    id="healthCheckPath"
+                    className="flex-1 px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('healthCheckPath') as HTMLInputElement;
+                      updateServiceMutation.mutate({ healthCheckPath: input.value || null });
+                    }}
+                    className="px-5 py-3 bg-white text-black rounded-xl hover:bg-gray-200 font-medium text-sm transition-all active:scale-95"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">When set, deployments will wait for this endpoint to return 2xx before going live. Enables zero-downtime blue-green deploys.</p>
+              </div>
+            </div>
           </AnimatedCard>
         </TabsContent>
       </Tabs>

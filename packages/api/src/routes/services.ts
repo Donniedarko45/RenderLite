@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -56,10 +57,9 @@ function maskEnvVars(rawEnvVars: unknown): Record<string, string> | null {
   return Object.keys(masked).length > 0 ? masked : null;
 }
 
-// All routes require authentication
 serviceRouter.use(authenticate);
 
-// List services (optionally filter by project)
+// List services
 serviceRouter.get('/', async (req: AuthRequest, res, next) => {
   try {
     const { projectId } = req.query;
@@ -93,7 +93,7 @@ serviceRouter.get('/', async (req: AuthRequest, res, next) => {
   }
 });
 
-// Get single service
+// Get single service (includes webhook URL)
 serviceRouter.get('/:id', async (req: AuthRequest, res, next) => {
   try {
     const service = await prisma.service.findFirst({
@@ -111,6 +111,9 @@ serviceRouter.get('/:id', async (req: AuthRequest, res, next) => {
           orderBy: { createdAt: 'desc' },
           take: 10,
         },
+        domains: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -118,9 +121,15 @@ serviceRouter.get('/:id', async (req: AuthRequest, res, next) => {
       throw new AppError('Service not found', 404);
     }
 
+    const apiUrl = process.env.API_URL || 'http://localhost:3001';
+    const webhookUrl = service.webhookSecret
+      ? `${apiUrl}/api/webhooks/github/${service.id}`
+      : null;
+
     res.json({
       ...service,
       envVars: maskEnvVars(service.envVars),
+      webhookUrl,
     });
   } catch (error) {
     next(error);
@@ -130,14 +139,22 @@ serviceRouter.get('/:id', async (req: AuthRequest, res, next) => {
 // Create service
 serviceRouter.post('/', async (req: AuthRequest, res, next) => {
   try {
-    const { name, projectId, repoUrl, branch, runtime, envVars } = req.body;
+    const {
+      name,
+      projectId,
+      repoUrl,
+      branch,
+      runtime,
+      envVars,
+      healthCheckPath,
+      healthCheckInterval,
+      healthCheckTimeout,
+    } = req.body;
 
-    // Validate required fields
     if (!name || !projectId || !repoUrl) {
       throw new AppError('Name, projectId, and repoUrl are required', 400);
     }
 
-    // Verify project ownership
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
@@ -149,14 +166,13 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
       throw new AppError('Project not found', 404);
     }
 
-    // Validate GitHub URL
     const githubUrlPattern = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+(?:\.git)?$/;
     if (!githubUrlPattern.test(repoUrl)) {
       throw new AppError('Invalid GitHub repository URL', 400);
     }
 
-    // Generate unique subdomain
     const subdomain = await generateSubdomain(name);
+    const webhookSecret = crypto.randomBytes(32).toString('hex');
 
     const encryptedEnvVars =
       envVars !== undefined ? normalizeAndEncryptEnvVars(envVars) : null;
@@ -170,6 +186,10 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
         runtime: runtime || null,
         subdomain,
         envVars: encryptedEnvVars,
+        webhookSecret,
+        healthCheckPath: healthCheckPath || null,
+        healthCheckInterval: healthCheckInterval ?? 30,
+        healthCheckTimeout: healthCheckTimeout ?? 5,
       },
       include: {
         project: {
@@ -178,9 +198,12 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
       },
     });
 
+    const apiUrl = process.env.API_URL || 'http://localhost:3001';
+
     res.status(201).json({
       ...service,
       envVars: maskEnvVars(service.envVars),
+      webhookUrl: `${apiUrl}/api/webhooks/github/${service.id}`,
     });
   } catch (error) {
     next(error);
@@ -190,9 +213,16 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
 // Update service
 serviceRouter.put('/:id', async (req: AuthRequest, res, next) => {
   try {
-    const { name, branch, runtime, envVars } = req.body;
+    const {
+      name,
+      branch,
+      runtime,
+      envVars,
+      healthCheckPath,
+      healthCheckInterval,
+      healthCheckTimeout,
+    } = req.body;
 
-    // Verify ownership
     const existing = await prisma.service.findFirst({
       where: {
         id: req.params.id,
@@ -216,6 +246,9 @@ serviceRouter.put('/:id', async (req: AuthRequest, res, next) => {
         ...(branch && { branch }),
         ...(runtime !== undefined && { runtime }),
         ...(envVars !== undefined && { envVars: encryptedEnvVars }),
+        ...(healthCheckPath !== undefined && { healthCheckPath }),
+        ...(healthCheckInterval !== undefined && { healthCheckInterval }),
+        ...(healthCheckTimeout !== undefined && { healthCheckTimeout }),
       },
       include: {
         project: {
@@ -236,7 +269,6 @@ serviceRouter.put('/:id', async (req: AuthRequest, res, next) => {
 // Delete service
 serviceRouter.delete('/:id', async (req: AuthRequest, res, next) => {
   try {
-    // Verify ownership
     const existing = await prisma.service.findFirst({
       where: {
         id: req.params.id,

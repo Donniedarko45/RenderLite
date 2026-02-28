@@ -4,7 +4,6 @@ import { prisma } from '../lib/prisma.js';
  * Generate a unique subdomain for a service
  */
 export async function generateSubdomain(serviceName: string): Promise<string> {
-  // Sanitize service name
   const base = serviceName
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
@@ -12,11 +11,9 @@ export async function generateSubdomain(serviceName: string): Promise<string> {
     .replace(/^-|-$/g, '')
     .substring(0, 20);
 
-  // Generate random suffix
   const randomSuffix = Math.random().toString(36).substring(2, 8);
   let subdomain = `${base}-${randomSuffix}`;
 
-  // Ensure uniqueness
   let exists = await prisma.service.findUnique({
     where: { subdomain },
   });
@@ -39,9 +36,10 @@ export async function generateSubdomain(serviceName: string): Promise<string> {
 }
 
 /**
- * Get full URL for a service
+ * Get full URL for a service, respecting TLS configuration
  */
 export function getServiceUrl(subdomain: string): string {
   const baseDomain = process.env.BASE_DOMAIN || 'renderlite.local';
-  return `http://${subdomain}.${baseDomain}`;
+  const protocol = process.env.ENABLE_TLS === 'true' ? 'https' : 'http';
+  return `${protocol}://${subdomain}.${baseDomain}`;
 }
