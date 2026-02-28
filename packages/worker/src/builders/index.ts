@@ -10,6 +10,33 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 type LogCallback = (log: string) => void;
 
+async function runNixpacksBuild(command: string, log: LogCallback): Promise<void> {
+  const { stdout, stderr } = await execAsync(command, {
+    timeout: DEFAULTS.BUILD_TIMEOUT_MS,
+    maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+  });
+
+  if (stdout) {
+    const lines = stdout
+      .split('\n')
+      .filter((line) => line.includes('==>') || line.includes('Step') || line.includes('Successfully'));
+    lines.forEach((line) => log(`   ${line}`));
+  }
+
+  if (stderr && !stderr.toLowerCase().includes('warning')) {
+    log(`   ⚠️ ${stderr}`);
+  }
+}
+
+function isLocalNixpacksMissing(error: any): boolean {
+  const details = `${error?.message || ''}\n${error?.stderr || ''}\n${error?.stdout || ''}`.toLowerCase();
+  return (
+    details.includes('nixpacks: not found') ||
+    details.includes('command not found: nixpacks') ||
+    details.includes('spawn nixpacks enoent')
+  );
+}
+
 /**
  * Build image using Nixpacks
  */
@@ -20,32 +47,37 @@ export async function buildWithNixpacks(
 ): Promise<void> {
   log('Running Nixpacks build...');
 
-  const command = `nixpacks build ${sourceDir} --name ${imageName}`;
-  
+  const localCommand = `nixpacks build "${sourceDir}" --name "${imageName}"`;
+
   try {
-    const { stdout, stderr } = await execAsync(command, {
-      timeout: DEFAULTS.BUILD_TIMEOUT_MS,
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
-    });
-
-    if (stdout) {
-      // Log relevant output lines
-      const lines = stdout.split('\n').filter(line => 
-        line.includes('==>') || 
-        line.includes('Step') ||
-        line.includes('Successfully')
-      );
-      lines.forEach(line => log(`   ${line}`));
-    }
-
-    if (stderr && !stderr.includes('warning')) {
-      log(`   ⚠️ ${stderr}`);
-    }
+    await runNixpacksBuild(localCommand, log);
   } catch (error: any) {
     if (error.killed) {
       throw new Error('Build timed out');
     }
-    throw new Error(`Nixpacks build failed: ${error.message}`);
+
+    if (!isLocalNixpacksMissing(error)) {
+      throw new Error(`Nixpacks build failed: ${error.message}`);
+    }
+
+    log('   ⚠️ Local nixpacks not found, using Dockerized Nixpacks fallback');
+    const dockerizedCommand = [
+      'docker run --rm',
+      '-v /var/run/docker.sock:/var/run/docker.sock',
+      `-v "${sourceDir}:/app"`,
+      '-w /app',
+      'ghcr.io/railwayapp/nixpacks:latest',
+      `build /app --name "${imageName}"`,
+    ].join(' ');
+
+    try {
+      await runNixpacksBuild(dockerizedCommand, log);
+    } catch (fallbackError: any) {
+      if (fallbackError.killed) {
+        throw new Error('Build timed out');
+      }
+      throw new Error(`Nixpacks build failed with Dockerized fallback: ${fallbackError.message}`);
+    }
   }
 }
 
@@ -74,7 +106,9 @@ export async function buildWithDockerfile(
 
       // Set timeout
       const timeout = setTimeout(() => {
-        stream.destroy();
+        if (typeof (stream as any).destroy === 'function') {
+          (stream as any).destroy();
+        }
         reject(new Error('Build timed out'));
       }, DEFAULTS.BUILD_TIMEOUT_MS);
 

@@ -108,6 +108,41 @@ export interface DeploymentStatusEvent {
   containerId?: string;
 }
 
+export type RealtimeEvent =
+  | {
+      type: 'deployment:log';
+      deploymentId: string;
+      log: string;
+      timestamp: string;
+    }
+  | {
+      type: 'deployment:status';
+      deploymentId: string;
+      status: DeploymentStatus;
+      timestamp: string;
+      containerId?: string;
+    }
+  | {
+      type: 'service:status';
+      serviceId: string;
+      status: ServiceStatus;
+      timestamp: string;
+    }
+  | {
+      type: 'service:metrics';
+      serviceId: string;
+      metrics: {
+        cpuPercent: number;
+        memoryUsage: number;
+        memoryLimit: number;
+        memoryPercent: number;
+        networkRx: number;
+        networkTx: number;
+        timestamp: string;
+      };
+      timestamp: string;
+    };
+
 // Container metrics
 export interface ContainerMetrics {
   containerId: string;

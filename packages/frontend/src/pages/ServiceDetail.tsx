@@ -26,6 +26,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+
 const statusColors: Record<string, string> = {
   CREATED: 'bg-gray-100 text-gray-700',
   DEPLOYING: 'bg-blue-100 text-blue-700',
@@ -38,6 +40,7 @@ export default function ServiceDetail() {
   const { serviceId } = useParams<{ serviceId: string }>();
   const queryClient = useQueryClient();
   const [metricsHistory, setMetricsHistory] = useState<any[]>([]);
+  const [currentStatus, setCurrentStatus] = useState<string>('');
   const [showEnvModal, setShowEnvModal] = useState(false);
   const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([
     { key: '', value: '' },
@@ -52,7 +55,7 @@ export default function ServiceDetail() {
   const { data: metrics } = useQuery({
     queryKey: ['service-metrics', serviceId],
     queryFn: () => metricsApi.getServiceMetrics(serviceId!).then((res) => res.data),
-    enabled: !!serviceId && service?.status === 'RUNNING',
+    enabled: !!serviceId && (currentStatus || service?.status) === 'RUNNING',
     refetchInterval: 5000,
   });
 
@@ -78,15 +81,28 @@ export default function ServiceDetail() {
     const unsubscribe = subscribeToService(
       serviceId,
       (data) => {
-        setMetricsHistory((prev) => [...prev.slice(-29), data.metrics]);
+        setMetricsHistory((prev) => [
+          ...prev.slice(-29),
+          {
+            ...data.metrics,
+            time: new Date().toLocaleTimeString(),
+          },
+        ]);
       },
       (data) => {
+        setCurrentStatus(data.status);
         queryClient.invalidateQueries({ queryKey: ['service', serviceId] });
       }
     );
 
     return unsubscribe;
   }, [serviceId, queryClient]);
+
+  useEffect(() => {
+    if (service?.status) {
+      setCurrentStatus(service.status);
+    }
+  }, [service?.status]);
 
   // Add metrics to history
   useEffect(() => {
@@ -116,6 +132,8 @@ export default function ServiceDetail() {
     return <div className="text-center py-12 text-gray-500">Service not found</div>;
   }
 
+  const displayStatus = currentStatus || service.status;
+
   return (
     <div>
       {/* Header */}
@@ -133,10 +151,10 @@ export default function ServiceDetail() {
               <h1 className="text-2xl font-bold text-gray-900">{service.name}</h1>
               <span
                 className={`px-3 py-1 text-xs font-medium rounded-full ${
-                  statusColors[service.status]
+                  statusColors[displayStatus]
                 }`}
               >
-                {service.status}
+                {displayStatus}
               </span>
             </div>
             <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
@@ -154,13 +172,13 @@ export default function ServiceDetail() {
                 Repository
               </a>
               <a
-                href={`http://${service.subdomain}.renderlite.local`}
+                href={`http://${service.subdomain}.${BASE_DOMAIN}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center hover:text-primary-600"
               >
                 <ExternalLink className="w-4 h-4 mr-1" />
-                {service.subdomain}.renderlite.local
+                {`${service.subdomain}.${BASE_DOMAIN}`}
               </a>
             </div>
           </div>
@@ -174,7 +192,7 @@ export default function ServiceDetail() {
             </button>
             <button
               onClick={() => deployMutation.mutate()}
-              disabled={deployMutation.isPending || service.status === 'DEPLOYING'}
+              disabled={deployMutation.isPending || displayStatus === 'DEPLOYING'}
               className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
               <Play className="w-5 h-5 mr-2" />
@@ -188,7 +206,7 @@ export default function ServiceDetail() {
         {/* Metrics */}
         <div className="bg-white rounded-xl shadow-sm border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Metrics</h2>
-          {service.status !== 'RUNNING' ? (
+          {displayStatus !== 'RUNNING' ? (
             <div className="text-center py-8 text-gray-500">
               Service is not running. Deploy to see metrics.
             </div>

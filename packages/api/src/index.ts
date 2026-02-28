@@ -64,14 +64,16 @@ app.use('/api/metrics', metricsRouter);
 app.use(errorHandler);
 
 // Socket.io setup
-setupSocketHandlers(io);
+const socketHandlers = setupSocketHandlers(io);
 
 // Make io accessible to routes
 app.set('io', io);
+app.set('socketHandlers', socketHandlers);
 
 // Graceful shutdown
 const shutdown = async () => {
   console.log('Shutting down gracefully...');
+  await socketHandlers.close();
   await prisma.$disconnect();
   await redis.quit();
   httpServer.close(() => {

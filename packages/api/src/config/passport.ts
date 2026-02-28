@@ -2,7 +2,18 @@ import passport from 'passport';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { prisma } from '../lib/prisma.js';
 
+export function isGitHubOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GITHUB_CLIENT_ID?.trim() && process.env.GITHUB_CLIENT_SECRET?.trim()
+  );
+}
+
 export function configurePassport() {
+  if (!isGitHubOAuthConfigured()) {
+    console.warn('GitHub OAuth disabled: missing GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET');
+    return;
+  }
+
   passport.use(
     new GitHubStrategy(
       {

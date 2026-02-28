@@ -46,15 +46,30 @@ export function subscribeToDeployment(
   onStatus: (data: { status: string; containerId?: string }) => void
 ) {
   const socket = getSocket();
-  
+
+  const logHandler = (data: { deploymentId: string; log: string; timestamp: string }) => {
+    if (data.deploymentId === deploymentId) {
+      onLog({ log: data.log, timestamp: data.timestamp });
+    }
+  };
+  const statusHandler = (data: {
+    deploymentId: string;
+    status: string;
+    containerId?: string;
+  }) => {
+    if (data.deploymentId === deploymentId) {
+      onStatus({ status: data.status, containerId: data.containerId });
+    }
+  };
+
   socket.emit('subscribe:deployment', deploymentId);
-  socket.on('deployment:log', onLog);
-  socket.on('deployment:status', onStatus);
+  socket.on('deployment:log', logHandler);
+  socket.on('deployment:status', statusHandler);
 
   return () => {
     socket.emit('unsubscribe:deployment', deploymentId);
-    socket.off('deployment:log', onLog);
-    socket.off('deployment:status', onStatus);
+    socket.off('deployment:log', logHandler);
+    socket.off('deployment:status', statusHandler);
   };
 }
 
@@ -65,14 +80,25 @@ export function subscribeToService(
   onStatus: (data: { status: string }) => void
 ) {
   const socket = getSocket();
-  
+
+  const metricsHandler = (data: { serviceId: string; metrics: any; timestamp: string }) => {
+    if (data.serviceId === serviceId) {
+      onMetrics(data);
+    }
+  };
+  const statusHandler = (data: { serviceId: string; status: string; timestamp: string }) => {
+    if (data.serviceId === serviceId) {
+      onStatus({ status: data.status });
+    }
+  };
+
   socket.emit('subscribe:service', serviceId);
-  socket.on('service:metrics', onMetrics);
-  socket.on('service:status', onStatus);
+  socket.on('service:metrics', metricsHandler);
+  socket.on('service:status', statusHandler);
 
   return () => {
     socket.emit('unsubscribe:service', serviceId);
-    socket.off('service:metrics', onMetrics);
-    socket.off('service:status', onStatus);
+    socket.off('service:metrics', metricsHandler);
+    socket.off('service:status', statusHandler);
   };
 }
