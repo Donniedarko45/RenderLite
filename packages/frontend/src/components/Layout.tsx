@@ -47,8 +47,8 @@ export default function Layout() {
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-white/5 relative z-10">
             <Link to="/" className="flex items-center space-x-3 group">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center transition-all duration-300">
-                <span className="text-black font-extrabold text-lg">R</span>
+              <div className="w-8 h-8 bg-white rounded-lg p-1 flex items-center justify-center transition-all duration-300">
+                <img src="/distributed.png" alt="RenderLite" className="w-full h-full object-contain" />
               </div>
               <span className="font-extrabold text-xl text-white tracking-tight">RenderLite</span>
             </Link>

@@ -53,9 +53,9 @@ export default function Login() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
-            className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6"
+            className="w-16 h-16 bg-white rounded-2xl p-2 flex items-center justify-center mx-auto mb-6"
           >
-            <span className="text-black font-bold text-3xl">R</span>
+            <img src="/distributed.png" alt="RenderLite" className="w-full h-full object-contain" />
           </motion.div>
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-white to-white/50 tracking-tight">RenderLite</h1>
           <p className="text-gray-400 mt-3 font-medium">
