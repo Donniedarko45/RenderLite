@@ -8,7 +8,6 @@ import { AnimatedCard } from '../components/AnimatedCard';
 import { Skeleton } from '../components/Skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft,
   Play,
   GitBranch,
   ExternalLink,
@@ -19,6 +18,10 @@ import {
   XCircle,
   Clock,
   Settings,
+  Eye,
+  EyeOff,
+  Copy,
+  ChevronRight,
 } from 'lucide-react';
 import {
   XAxis,
@@ -49,8 +52,8 @@ export default function ServiceDetail() {
   const [metricsHistory, setMetricsHistory] = useState<any[]>([]);
   const [currentStatus, setCurrentStatus] = useState<string>('');
   const [showEnvModal, setShowEnvModal] = useState(false);
-  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([
-    { key: '', value: '' },
+  const [envVars, setEnvVars] = useState<{ key: string; value: string; hidden?: boolean }[]>([
+    { key: '', value: '', hidden: true },
   ]);
 
   const { data: service, isLoading } = useQuery({
@@ -173,13 +176,13 @@ export default function ServiceDetail() {
     <PageTransition>
       {/* Header */}
       <div className="mb-10">
-        <Link
-          to={`/projects/${service.project.id}`}
-          className="inline-flex items-center text-sm text-gray-400 hover:text-white mb-6 transition-all hover:-translate-x-1"
-        >
-          <ArrowLeft className="w-4 h-4 mr-1.5" />
-          Back to {service.project.name}
-        </Link>
+        <div className="flex items-center text-sm text-gray-400 mb-6 font-medium space-x-2">
+          <Link to="/projects" className="hover:text-white transition-colors">Projects</Link>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <Link to={`/projects/${service.project.id}`} className="hover:text-white transition-colors">{service.project.name}</Link>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-200">{service.name}</span>
+        </div>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <div className="flex items-center space-x-4">
@@ -414,7 +417,7 @@ export default function ServiceDetail() {
               </h2>
               <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                 {envVars.map((env, index) => (
-                  <div key={index} className="flex space-x-3 group">
+                  <div key={index} className="flex space-x-3 group items-center">
                     <input
                       type="text"
                       value={env.key}
@@ -426,22 +429,47 @@ export default function ServiceDetail() {
                       placeholder="KEY"
                       className="flex-1 px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none"
                     />
-                    <input
-                      type="text"
-                      value={env.value}
-                      onChange={(e) => {
-                        const newVars = [...envVars];
-                        newVars[index].value = e.target.value;
-                        setEnvVars(newVars);
-                      }}
-                      placeholder="value"
-                      className="flex-[2] px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none"
-                    />
+                    <div className="flex-[2] relative">
+                      <input
+                        type={env.hidden ? 'password' : 'text'}
+                        value={env.value}
+                        onChange={(e) => {
+                          const newVars = [...envVars];
+                          newVars[index].value = e.target.value;
+                          setEnvVars(newVars);
+                        }}
+                        placeholder="value"
+                        className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none pr-20"
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newVars = [...envVars];
+                            newVars[index].hidden = !newVars[index].hidden;
+                            setEnvVars(newVars);
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                        >
+                          {env.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(env.value);
+                            toast.success('Copied to clipboard');
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
               <button
-                onClick={() => setEnvVars([...envVars, { key: '', value: '' }])}
+                onClick={() => setEnvVars([...envVars, { key: '', value: '', hidden: false }])}
                 className="mt-6 px-4 py-2.5 text-sm font-medium text-gray-300 bg-white/5 hover:bg-white/10 rounded-lg transition-all border border-white/5 w-full hover:border-white/20 active:scale-[0.98]"
               >
                 + Add Variable

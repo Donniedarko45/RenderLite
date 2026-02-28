@@ -8,14 +8,18 @@ import { AnimatedCard } from '../components/AnimatedCard';
 import { Skeleton } from '../components/Skeleton';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft,
   CheckCircle,
   XCircle,
   Activity,
   Clock,
   GitCommit,
   ExternalLink,
+  ChevronRight,
+  Copy,
+  Lock,
+  Unlock
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
 
@@ -37,6 +41,7 @@ export default function DeploymentDetail() {
   const { deploymentId } = useParams<{ deploymentId: string }>();
   const [liveLogs, setLiveLogs] = useState<string[]>([]);
   const [currentStatus, setCurrentStatus] = useState<string>('');
+  const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const { data: deployment, isLoading, refetch } = useQuery({
@@ -74,15 +79,17 @@ export default function DeploymentDetail() {
 
   // Update status from deployment data
   useEffect(() => {
-    if (deployment) {
+    if (deployment?.status) {
       setCurrentStatus(deployment.status);
     }
   }, [deployment]);
 
   // Auto-scroll logs
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [liveLogs, logsData]);
+    if (autoScroll) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [liveLogs, logsData, autoScroll]);
 
   // Parse logs for display
   const formatLogs = (logs: string) => {
@@ -96,16 +103,16 @@ export default function DeploymentDetail() {
 
   const getLogLineClass = (line: string) => {
     if (line.includes('❌') || line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')) {
-      return 'text-[#ff003c] font-bold';
+      return 'text-[#ff5f56]';
     }
     if (line.includes('✅') || line.toLowerCase().includes('success')) {
-      return 'text-[#00ff00] font-bold';
+      return 'text-[#27c93f]';
     }
     if (line.includes('⚠️') || line.toLowerCase().includes('warning')) {
-      return 'text-yellow-400';
+      return 'text-[#ffbd2e]';
     }
     if (line.includes('🚀') || line.includes('📦') || line.includes('📥') || line.includes('🔨') || line.includes('🐳')) {
-      return 'text-[#0070f3]';
+      return 'text-[#3b82f6]';
     }
     if (line.includes('STEP')) {
       return 'text-white font-bold bg-white/10 px-2 py-0.5 rounded inline-block mt-2 mb-1';
@@ -140,13 +147,15 @@ export default function DeploymentDetail() {
     <PageTransition>
       {/* Header */}
       <div className="mb-10">
-        <Link
-          to={`/services/${deployment.service.id}`}
-          className="inline-flex items-center text-sm text-gray-400 hover:text-white mb-6 transition-all hover:-translate-x-1"
-        >
-          <ArrowLeft className="w-4 h-4 mr-1.5" />
-          Back to {deployment.service.name}
-        </Link>
+        <div className="flex items-center text-sm text-gray-400 mb-6 font-medium space-x-2">
+          <Link to="/projects" className="hover:text-white transition-colors">Projects</Link>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <Link to={`/projects/${deployment?.service?.project?.id}`} className="hover:text-white transition-colors">{deployment?.service?.project?.name}</Link>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <Link to={`/services/${deployment?.service?.id}`} className="hover:text-white transition-colors">{deployment?.service?.name}</Link>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-200">Deployment #{deployment?.id?.substring(0, 8)}</span>
+        </div>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <div className="flex items-center space-x-4">
@@ -159,10 +168,10 @@ export default function DeploymentDetail() {
               </motion.h1>
               <span
                 className={`px-3 py-1.5 text-xs font-semibold tracking-wider rounded-md ${
-                  statusColors[currentStatus || deployment.status]
+                  statusColors[currentStatus || deployment?.status || 'QUEUED']
                 }`}
               >
-                {currentStatus || deployment.status}
+                {currentStatus || deployment?.status || 'QUEUED'}
               </span>
             </div>
             <motion.div 
@@ -171,7 +180,7 @@ export default function DeploymentDetail() {
               transition={{ delay: 0.1 }}
               className="flex flex-wrap items-center gap-5 mt-4 text-sm text-gray-400 font-medium"
             >
-              {deployment.commitSha && (
+              {deployment?.commitSha && (
                 <span className="flex items-center font-mono bg-white/5 px-2.5 py-1 rounded-md border border-white/10">
                   <GitCommit className="w-4 h-4 mr-1.5" />
                   {deployment.commitSha.substring(0, 7)}
@@ -179,9 +188,9 @@ export default function DeploymentDetail() {
               )}
               <span className="flex items-center">
                 <Clock className="w-4 h-4 mr-1.5 text-gray-500" />
-                Started: {new Date(deployment.createdAt).toLocaleString()}
+                Started: {deployment?.createdAt ? new Date(deployment.createdAt).toLocaleString() : 'Loading...'}
               </span>
-              {deployment.finishedAt && (
+              {deployment?.finishedAt && (
                 <span className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-1.5 text-gray-500" />
                   Finished: {new Date(deployment.finishedAt).toLocaleString()}
@@ -195,10 +204,10 @@ export default function DeploymentDetail() {
             transition={{ delay: 0.2 }}
             className="flex items-center space-x-4 bg-[#111]/80 backdrop-blur-sm border border-white/10 px-5 py-3 rounded-xl shadow-inner"
           >
-            {statusIcons[currentStatus || deployment.status]}
-            {(currentStatus || deployment.status) === 'SUCCESS' && (
+            {statusIcons[currentStatus || deployment?.status || 'QUEUED']}
+            {(currentStatus || deployment?.status) === 'SUCCESS' && (
               <a
-                href={`http://${deployment.service.subdomain}.${BASE_DOMAIN}`}
+                href={`http://${deployment?.service?.subdomain}.${BASE_DOMAIN}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center text-sm font-medium text-white hover:text-gray-300 ml-4 border-l border-white/10 pl-4 transition-colors group"
@@ -217,12 +226,12 @@ export default function DeploymentDetail() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div>
               <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Service</p>
-              <p className="font-semibold text-white text-base">{deployment.service.name}</p>
+              <p className="font-semibold text-white text-base">{deployment?.service?.name}</p>
             </div>
             <div>
               <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Repository</p>
               <a
-                href={deployment.service.repoUrl}
+                href={deployment?.service?.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-white text-base hover:underline decoration-white/30 underline-offset-4 transition-all"
@@ -232,11 +241,11 @@ export default function DeploymentDetail() {
             </div>
             <div>
               <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Branch</p>
-              <p className="font-semibold text-white text-base font-mono">{deployment.service.branch}</p>
+              <p className="font-semibold text-white text-base font-mono">{deployment?.service?.branch}</p>
             </div>
             <div>
               <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Subdomain</p>
-              <p className="font-semibold text-white text-base font-mono">{deployment.service.subdomain}</p>
+              <p className="font-semibold text-white text-base font-mono">{deployment?.service?.subdomain}</p>
             </div>
         </div>
       </AnimatedCard>
@@ -249,17 +258,37 @@ export default function DeploymentDetail() {
         className="bg-[#0a0a0a] rounded-xl border border-white/10 overflow-hidden shadow-2xl"
       >
         <div className="px-6 py-4 border-b border-white/10 bg-[#111] flex items-center justify-between">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center">
-            <Activity className="w-4 h-4 mr-2" />
-            Build Logs
-          </h2>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-[#ff003c]/80"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-            <div className="w-3 h-3 rounded-full bg-[#00ff00]/80"></div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
+            </div>
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-4">
+              Terminal
+            </h2>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setAutoScroll(!autoScroll)}
+              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${autoScroll ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+            >
+              {autoScroll ? <Lock className="w-3 h-3 mr-1.5" /> : <Unlock className="w-3 h-3 mr-1.5" />}
+              Auto-scroll
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(allLogs.join('\n'));
+                toast.success('Logs copied to clipboard');
+              }}
+              className="flex items-center px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-white/5 rounded-md transition-colors"
+            >
+              <Copy className="w-3 h-3 mr-1.5" />
+              Copy
+            </button>
           </div>
         </div>
-        <div className="log-viewer min-h-[500px] border-none rounded-none p-6 font-mono text-[13px] leading-relaxed custom-scrollbar selection:bg-white/20 selection:text-white">
+        <div className="log-viewer h-[600px] border-none rounded-none p-6 font-mono text-[13px] leading-relaxed custom-scrollbar selection:bg-white/20 selection:text-white overflow-y-auto">
           {allLogs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center py-20">
               <Activity className="w-10 h-10 text-gray-600 mb-4 animate-pulse" />

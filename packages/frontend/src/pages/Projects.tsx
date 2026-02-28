@@ -6,11 +6,28 @@ import { PageTransition } from '../components/PageTransition';
 import { AnimatedCard } from '../components/AnimatedCard';
 import { Skeleton } from '../components/Skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FolderKanban, Server, Trash2 } from 'lucide-react';
+import { Plus, FolderKanban, Server, Trash2, MoreVertical, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '../components/DropdownMenu';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '../components/AlertDialog';
 
 const projectSchema = z.object({
   name: z.string().min(3, 'Project name must be at least 3 characters').max(50, 'Project name must be less than 50 characters').regex(/^[a-z0-9-]+$/, 'Project name can only contain lowercase letters, numbers, and dashes'),
@@ -22,6 +39,8 @@ export default function Projects() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+  const [deleteProjectName, setDeleteProjectName] = useState<string>('');
+  const [confirmName, setConfirmName] = useState('');
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
@@ -50,6 +69,7 @@ export default function Projects() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setDeleteProjectId(null);
+      setConfirmName('');
       toast.success('Project deleted successfully');
     },
     onError: () => {
@@ -97,10 +117,13 @@ export default function Projects() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-[#111] rounded-xl border border-white/10 p-6 h-48">
-              <Skeleton className="h-10 w-10 mb-4 rounded-lg" />
-              <Skeleton className="h-6 w-3/4 mb-4" />
-              <Skeleton className="h-4 w-1/2" />
+            <div key={i} className="bg-[#0a0a0a] rounded-xl border border-white/10 p-6 flex flex-col h-full">
+              <div className="flex items-start justify-between">
+                <Skeleton className="w-12 h-12 rounded-xl bg-white/10" />
+              </div>
+              <Skeleton className="h-6 w-3/4 mt-5 mb-3 bg-white/10" />
+              <Skeleton className="h-4 w-24 bg-white/5" />
+              <Skeleton className="h-3 w-32 mt-6 bg-white/5" />
             </div>
           ))}
         </div>
@@ -137,15 +160,36 @@ export default function Projects() {
                     <div className="p-3 bg-white/5 rounded-lg border border-white/10 group-hover:border-white/20 transition-colors shadow-inner">
                       <FolderKanban className="w-6 h-6 text-gray-300 group-hover:text-white transition-colors" />
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setDeleteProjectId(project.id);
-                      }}
-                      className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all duration-300 opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div onClick={(e) => e.preventDefault()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-300 opacity-0 group-hover:opacity-100"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => {}}>
+                            <Settings className="w-4 h-4 mr-2" />
+                            Settings
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteProjectId(project.id);
+                              setDeleteProjectName(project.name);
+                              setConfirmName('');
+                            }}
+                            className="text-red-400 focus:text-red-300 focus:bg-red-400/10"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Project
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                   <h3 className="text-xl font-bold text-white mt-5 tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-gray-400 transition-all">
                     {project.name}
@@ -229,46 +273,44 @@ export default function Projects() {
       </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
-      <AnimatePresence>
-        {deleteProjectId && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#111] border border-red-500/20 rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4"
+      <AlertDialog open={!!deleteProjectId} onOpenChange={(open) => !open && setDeleteProjectId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the project{' '}
+              <strong className="text-white">{deleteProjectName}</strong> and all of its
+              services, deployments, and environment variables.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="my-4">
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Type <strong className="text-white">{deleteProjectName}</strong> to confirm
+            </label>
+            <input
+              type="text"
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              className="w-full px-4 py-2.5 bg-black border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-red-500/20 focus:border-red-500/30 transition-all outline-none font-mono text-sm"
+              placeholder={deleteProjectName}
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmName !== deleteProjectName || deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteProjectId) deleteMutation.mutate(deleteProjectId);
+              }}
             >
-              <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">
-                Delete Project
-              </h2>
-              <p className="text-gray-400 mb-8 leading-relaxed">
-                Are you sure you want to delete this project? This will also delete all
-                services and deployments. <span className="text-red-400">This action cannot be undone.</span>
-              </p>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setDeleteProjectId(null)}
-                  className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors font-medium rounded-lg hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => deleteMutation.mutate(deleteProjectId)}
-                  disabled={deleteMutation.isPending}
-                  className="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 font-medium transition-all active:scale-95"
-                >
-                  {deleteMutation.isPending ? 'Deleting...' : 'Delete Project'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Project'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageTransition>
   );
 }

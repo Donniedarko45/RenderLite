@@ -7,7 +7,6 @@ import { AnimatedCard } from '../components/AnimatedCard';
 import { Skeleton } from '../components/Skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft,
   Plus,
   Server,
   GitBranch,
@@ -18,11 +17,32 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  MoreVertical,
+  Settings,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '../components/DropdownMenu';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '../components/AlertDialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/Tooltip';
 
 const serviceSchema = z.object({
   name: z.string().min(3, 'Service name must be at least 3 characters').regex(/^[a-z0-9-]+$/, 'Lowercase letters, numbers, and dashes only'),
@@ -46,6 +66,9 @@ export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteServiceId, setDeleteServiceId] = useState<string | null>(null);
+  const [deleteServiceName, setDeleteServiceName] = useState('');
+  const [confirmName, setConfirmName] = useState('');
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
@@ -88,6 +111,8 @@ export default function ProjectDetail() {
     mutationFn: (serviceId: string) => servicesApi.delete(serviceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setDeleteServiceId(null);
+      setConfirmName('');
       toast.success('Service deleted successfully');
     },
     onError: () => {
@@ -128,13 +153,11 @@ export default function ProjectDetail() {
     <PageTransition>
       {/* Header */}
       <div className="mb-10">
-        <Link
-          to="/projects"
-          className="inline-flex items-center text-sm text-gray-400 hover:text-white mb-6 transition-all hover:-translate-x-1"
-        >
-          <ArrowLeft className="w-4 h-4 mr-1.5" />
-          Back to Projects
-        </Link>
+        <div className="flex items-center text-sm text-gray-400 mb-6 font-medium space-x-2">
+          <Link to="/projects" className="hover:text-white transition-colors">Projects</Link>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-200">{project.name}</span>
+        </div>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <motion.h1 
@@ -228,7 +251,7 @@ export default function ProjectDetail() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2">
                     <span
                       className={`px-3 py-1.5 text-xs font-semibold tracking-wider rounded-md ${
                         statusColors[service.status] || statusColors.CREATED
@@ -236,25 +259,45 @@ export default function ProjectDetail() {
                     >
                       {service.status}
                     </span>
-                    <button
-                      onClick={() => deployMutation.mutate(service.id)}
-                      disabled={deployMutation.isPending || service.status === 'DEPLOYING'}
-                      className="p-2 text-white bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg disabled:opacity-50 transition-all active:scale-95"
-                      title="Deploy"
-                    >
-                      <Play className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Delete this service?')) {
-                          deleteServiceMutation.mutate(service.id);
-                        }
-                      }}
-                      className="p-2 text-red-400 bg-red-400/5 border border-red-400/10 hover:bg-red-400/20 hover:text-red-300 rounded-lg transition-all active:scale-95"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => deployMutation.mutate(service.id)}
+                          disabled={deployMutation.isPending || service.status === 'DEPLOYING'}
+                          className="p-2 text-white bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg disabled:opacity-50 transition-all active:scale-95"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Deploy Service</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-2 text-gray-400 bg-white/5 border border-white/10 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem asChild>
+                          <Link to={`/services/${service.id}`} className="w-full">
+                            <Settings className="w-4 h-4 mr-2" />
+                            Settings
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setDeleteServiceId(service.id);
+                            setDeleteServiceName(service.name);
+                            setConfirmName('');
+                          }}
+                          className="text-red-400 focus:text-red-300 focus:bg-red-400/10"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Service
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
 
@@ -383,6 +426,46 @@ export default function ProjectDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={!!deleteServiceId} onOpenChange={(open) => !open && setDeleteServiceId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Service</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the service{' '}
+              <strong className="text-white">{deleteServiceName}</strong> and all of its
+              deployments and environment variables.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="my-4">
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Type <strong className="text-white">{deleteServiceName}</strong> to confirm
+            </label>
+            <input
+              type="text"
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              className="w-full px-4 py-2.5 bg-black border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-red-500/20 focus:border-red-500/30 transition-all outline-none font-mono text-sm"
+              placeholder={deleteServiceName}
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmName !== deleteServiceName || deleteServiceMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteServiceId) deleteServiceMutation.mutate(deleteServiceId);
+              }}
+            >
+              {deleteServiceMutation.isPending ? 'Deleting...' : 'Delete Service'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageTransition>
   );
 }

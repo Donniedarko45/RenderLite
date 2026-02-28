@@ -84,25 +84,35 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {stats.map((stat, i) => (
-          <AnimatedCard key={stat.name} delay={i * 0.1}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-400">{stat.name}</p>
-                {overviewLoading ? (
-                  <Skeleton className="h-9 w-16 mt-2" />
-                ) : (
+        {overviewLoading ? (
+          <>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-[#0a0a0a] rounded-xl border border-white/10 p-6 flex justify-between items-center">
+                <div>
+                  <Skeleton className="h-4 w-16 mb-2 bg-white/5" />
+                  <Skeleton className="h-8 w-12 bg-white/10" />
+                </div>
+                <Skeleton className="h-12 w-12 rounded-xl bg-white/5" />
+              </div>
+            ))}
+          </>
+        ) : (
+          stats.map((stat, i) => (
+            <AnimatedCard key={stat.name} delay={i * 0.1}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-400">{stat.name}</p>
                   <p className="text-3xl font-bold text-white mt-2">
                     {stat.value}
                   </p>
-                )}
+                </div>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <stat.icon className="w-5 h-5 text-gray-300" />
+                </div>
               </div>
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                <stat.icon className="w-5 h-5 text-gray-300" />
-              </div>
-            </div>
-          </AnimatedCard>
-        ))}
+            </AnimatedCard>
+          ))
+        )}
       </div>
 
       {/* Recent Deployments */}
@@ -125,10 +135,20 @@ export default function Dashboard() {
         </div>
         <div className="divide-y divide-white/5 relative z-10">
           {deploymentsLoading ? (
-            <div className="p-8 space-y-4">
-               <Skeleton className="h-12 w-full" />
-               <Skeleton className="h-12 w-full" />
-               <Skeleton className="h-12 w-full" />
+            <div className="divide-y divide-white/5">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center px-6 py-4">
+                  <Skeleton className="w-5 h-5 rounded-full bg-white/10" />
+                  <div className="ml-4 flex-1">
+                    <Skeleton className="h-4 w-32 mb-2 bg-white/10" />
+                    <Skeleton className="h-3 w-16 bg-white/5" />
+                  </div>
+                  <div className="text-right">
+                    <Skeleton className="h-4 w-20 mb-2 ml-auto bg-white/10" />
+                    <Skeleton className="h-3 w-24 ml-auto bg-white/5" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : recentDeployments?.length === 0 ? (
             <div className="p-16 text-center border border-dashed border-white/10 m-4 rounded-xl bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')]">

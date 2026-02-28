@@ -24,12 +24,43 @@
   .text-glow {
     text-shadow: 0 0 20px rgba(255,255,255,0.3);
   }
+
+  /* Shimmer animation for high-end skeletons */
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+}
+
+/* NProgress Customization */
+#nprogress .bar {
+  background: white !important;
+  height: 2px !important;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px white, 0 0 5px white !important;
 }
 
 ::-webkit-scrollbar-track {
@@ -46,8 +77,8 @@
 
 /* Log viewer styles */
 .log-viewer {
-  @apply font-mono text-[13px] bg-black text-gray-300 p-4 rounded-lg overflow-auto border border-white/10;
-  max-height: 500px;
+  @apply font-mono text-[13px] bg-[#0d0d0d] text-gray-300 rounded-b-xl overflow-auto border border-t-0 border-white/10;
+  max-height: 600px;
 }
 
 .log-viewer .log-line {

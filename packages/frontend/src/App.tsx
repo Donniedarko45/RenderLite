@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -9,14 +9,43 @@ import ProjectDetail from './pages/ProjectDetail';
 import ServiceDetail from './pages/ServiceDetail';
 import DeploymentDetail from './pages/DeploymentDetail';
 import { Toaster } from 'sonner';
+import { TooltipProvider } from './components/Tooltip';
+import { Spinner } from './components/Spinner';
+import { useEffect } from 'react';
+import NProgress from 'nprogress';
+import 'nprogress/nprogress.css';
+
+// Configure NProgress styling
+NProgress.configure({ 
+  showSpinner: false,
+  minimum: 0.1,
+  speed: 400
+});
+
+// A component that hooks into the router to show the progress bar on navigation
+function RouteProgress() {
+  const location = useLocation();
+
+  useEffect(() => {
+    NProgress.start();
+    const timeout = setTimeout(() => {
+      NProgress.done();
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [location]);
+
+  return null;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-black">
+        <Spinner size="lg" className="mb-4 text-white" />
+        <p className="text-gray-500 font-mono text-sm tracking-widest uppercase">Initializing</p>
       </div>
     );
   }
@@ -30,7 +59,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <>
+    <TooltipProvider>
+      <RouteProgress />
       <Toaster theme="dark" position="bottom-right" className="font-sans" />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -51,7 +81,7 @@ function App() {
           <Route path="deployments/:deploymentId" element={<DeploymentDetail />} />
         </Route>
       </Routes>
-    </>
+    </TooltipProvider>
   );
 }
 
