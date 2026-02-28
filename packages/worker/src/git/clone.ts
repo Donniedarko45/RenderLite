@@ -1,22 +1,34 @@
 import simpleGit, { SimpleGit } from 'simple-git';
 import { DEFAULTS } from '@renderlite/shared';
 
+/**
+ * Build an authenticated clone URL by injecting the token.
+ * Input:  https://github.com/owner/repo
+ * Output: https://{token}@github.com/owner/repo.git
+ */
+function buildAuthUrl(repoUrl: string, token: string): string {
+  const url = new URL(repoUrl.endsWith('.git') ? repoUrl : `${repoUrl}.git`);
+  url.username = token;
+  return url.toString();
+}
+
 export async function cloneRepository(
   repoUrl: string,
   branch: string,
-  targetDir: string
+  targetDir: string,
+  githubToken?: string
 ): Promise<void> {
   const git: SimpleGit = simpleGit();
 
-  // Set timeout for clone operation
   const controller = new AbortController();
   const timeout = setTimeout(() => {
     controller.abort();
   }, DEFAULTS.CLONE_TIMEOUT_MS);
 
+  const cloneUrl = githubToken ? buildAuthUrl(repoUrl, githubToken) : repoUrl;
+
   try {
-    // Clone with depth 1 for faster checkout (shallow clone)
-    await git.clone(repoUrl, targetDir, [
+    await git.clone(cloneUrl, targetDir, [
       '--branch', branch,
       '--depth', '1',
       '--single-branch',
@@ -35,8 +47,7 @@ export async function getLatestCommitSha(repoDir: string): Promise<string> {
 export async function getRepoSize(repoDir: string): Promise<number> {
   const git: SimpleGit = simpleGit(repoDir);
   const result = await git.raw(['count-objects', '-vH']);
-  
-  // Parse size from output
+
   const match = result.match(/size-pack:\s*(\d+)/);
   if (match) {
     return parseInt(match[1], 10);

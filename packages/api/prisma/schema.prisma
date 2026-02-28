@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -23,42 +22,96 @@ enum DeploymentStatus {
   FAILED
 }
 
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum DatabaseType {
+  POSTGRES
+  REDIS
+  MYSQL
+}
+
+enum DatabaseStatus {
+  PROVISIONING
+  RUNNING
+  STOPPED
+  FAILED
+}
+
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  githubId  String    @unique
-  username  String
-  avatarUrl String?
-  createdAt DateTime  @default(now())
-  projects  Project[]
+  id                String       @id @default(uuid())
+  email             String       @unique
+  githubId          String       @unique
+  username          String
+  avatarUrl         String?
+  githubAccessToken String?
+  createdAt         DateTime     @default(now())
+  projects          Project[]
+  memberships       Membership[]
+  ownedOrgs         Organization[] @relation("OrgOwner")
+}
+
+model Organization {
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique
+  ownerId     String
+  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+  projects    Project[]    @relation("OrgProjects")
+  createdAt   DateTime     @default(now())
+}
+
+model Membership {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           MemberRole   @default(MEMBER)
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, organizationId])
 }
 
 model Project {
-  id        String    @id @default(uuid())
-  name      String
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  services  Service[]
-  createdAt DateTime  @default(now())
+  id             String          @id @default(uuid())
+  name           String
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization?   @relation("OrgProjects", fields: [organizationId], references: [id], onDelete: SetNull)
+  services       Service[]
+  databases      ManagedDatabase[]
+  createdAt      DateTime        @default(now())
 
   @@unique([name, userId])
 }
 
 model Service {
-  id          String        @id @default(uuid())
-  name        String
-  projectId   String
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  repoUrl     String
-  branch      String        @default("main")
-  runtime     String?
-  subdomain   String        @unique
-  envVars     Json?
-  status      ServiceStatus @default(CREATED)
-  containerId String?
-  deployments Deployment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  name               String
+  projectId          String
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repoUrl            String
+  branch             String        @default("main")
+  runtime            String?
+  subdomain          String        @unique
+  envVars            Json?
+  status             ServiceStatus @default(CREATED)
+  containerId        String?
+  healthCheckPath    String?
+  healthCheckInterval Int          @default(30)
+  healthCheckTimeout  Int          @default(5)
+  webhookSecret      String?
+  deployments        Deployment[]
+  domains            Domain[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@unique([name, projectId])
 }
@@ -68,9 +121,39 @@ model Deployment {
   serviceId  String
   service    Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   commitSha  String?
+  imageTag   String?
   status     DeploymentStatus @default(QUEUED)
   logs       String?          @db.Text
   startedAt  DateTime?
   finishedAt DateTime?
   createdAt  DateTime         @default(now())
+}
+
+model Domain {
+  id                String   @id @default(uuid())
+  serviceId         String
+  service           Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  hostname          String   @unique
+  verified          Boolean  @default(false)
+  verificationToken String
+  createdAt         DateTime @default(now())
+}
+
+model ManagedDatabase {
+  id          String         @id @default(uuid())
+  name        String
+  projectId   String
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        DatabaseType
+  status      DatabaseStatus @default(PROVISIONING)
+  containerId String?
+  host        String?
+  port        Int?
+  dbName      String?
+  username    String?
+  password    String?
+  volumeName  String?
+  createdAt   DateTime       @default(now())
+
+  @@unique([name, projectId])
 }

@@ -1,6 +1,7 @@
 import passport from 'passport';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { prisma } from '../lib/prisma.js';
+import { encrypt } from '../utils/encryption.js';
 
 export function isGitHubOAuthConfigured(): boolean {
   return Boolean(
@@ -20,7 +21,7 @@ export function configurePassport() {
         clientID: process.env.GITHUB_CLIENT_ID || '',
         clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
         callbackURL: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3001/auth/github/callback',
-        scope: ['user:email', 'read:user'],
+        scope: ['user:email', 'read:user', 'repo'],
       },
       async (
         accessToken: string,
@@ -30,8 +31,8 @@ export function configurePassport() {
       ) => {
         try {
           const email = profile.emails?.[0]?.value || `${profile.username}@github.local`;
-          
-          // Find or create user
+          const encryptedToken = encrypt(accessToken);
+
           let user = await prisma.user.findUnique({
             where: { githubId: profile.id },
           });
@@ -43,16 +44,17 @@ export function configurePassport() {
                 email,
                 username: profile.username,
                 avatarUrl: profile.photos?.[0]?.value,
+                githubAccessToken: encryptedToken,
               },
             });
           } else {
-            // Update user info on each login
             user = await prisma.user.update({
               where: { id: user.id },
               data: {
                 email,
                 username: profile.username,
                 avatarUrl: profile.photos?.[0]?.value,
+                githubAccessToken: encryptedToken,
               },
             });
           }

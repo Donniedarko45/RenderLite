@@ -2,21 +2,51 @@ import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { getUserRoleInOrg, canAccessProject } from '../middleware/permissions.js';
 
 export const projectRouter = Router();
 
-// All routes require authentication
 projectRouter.use(authenticate);
 
-// List all projects for current user
+// List all projects the user can access (own + org projects)
 projectRouter.get('/', async (req: AuthRequest, res, next) => {
   try {
-    const projects = await prisma.project.findMany({
-      where: { userId: req.user!.id },
-      include: {
-        _count: {
-          select: { services: true },
+    const { organizationId } = req.query;
+
+    if (organizationId) {
+      const role = await getUserRoleInOrg(req.user!.id, organizationId as string);
+      if (!role) {
+        throw new AppError('Organization not found', 404);
+      }
+
+      const projects = await prisma.project.findMany({
+        where: { organizationId: organizationId as string },
+        include: {
+          _count: { select: { services: true } },
+          organization: { select: { id: true, name: true, slug: true } },
         },
+        orderBy: { createdAt: 'desc' },
+      });
+      return res.json(projects);
+    }
+
+    // Personal projects + projects from orgs the user belongs to
+    const memberships = await prisma.membership.findMany({
+      where: { userId: req.user!.id },
+      select: { organizationId: true },
+    });
+    const orgIds = memberships.map((m) => m.organizationId);
+
+    const projects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { userId: req.user!.id },
+          ...(orgIds.length > 0 ? [{ organizationId: { in: orgIds } }] : []),
+        ],
+      },
+      include: {
+        _count: { select: { services: true } },
+        organization: { select: { id: true, name: true, slug: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -30,12 +60,15 @@ projectRouter.get('/', async (req: AuthRequest, res, next) => {
 // Get single project
 projectRouter.get('/:id', async (req: AuthRequest, res, next) => {
   try {
-    const project = await prisma.project.findFirst({
-      where: {
-        id: req.params.id,
-        userId: req.user!.id,
-      },
+    const hasAccess = await canAccessProject(req.user!.id, req.params.id);
+    if (!hasAccess) {
+      throw new AppError('Project not found', 404);
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.id },
       include: {
+        organization: { select: { id: true, name: true, slug: true } },
         services: {
           select: {
             id: true,
@@ -65,6 +98,16 @@ projectRouter.get('/:id', async (req: AuthRequest, res, next) => {
           },
           orderBy: { createdAt: 'desc' },
         },
+        databases: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            status: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -78,19 +121,31 @@ projectRouter.get('/:id', async (req: AuthRequest, res, next) => {
   }
 });
 
-// Create project
+// Create project (personal or under an organization)
 projectRouter.post('/', async (req: AuthRequest, res, next) => {
   try {
-    const { name } = req.body;
+    const { name, organizationId } = req.body;
 
     if (!name || typeof name !== 'string') {
       throw new AppError('Project name is required', 400);
+    }
+
+    if (organizationId) {
+      const role = await getUserRoleInOrg(req.user!.id, organizationId);
+      if (!role) {
+        throw new AppError('Organization not found or access denied', 404);
+      }
+      const viewerOnly = role === 'VIEWER';
+      if (viewerOnly) {
+        throw new AppError('Viewers cannot create projects', 403);
+      }
     }
 
     const project = await prisma.project.create({
       data: {
         name: name.trim(),
         userId: req.user!.id,
+        organizationId: organizationId || null,
       },
     });
 
@@ -109,15 +164,8 @@ projectRouter.put('/:id', async (req: AuthRequest, res, next) => {
       throw new AppError('Project name is required', 400);
     }
 
-    // Verify ownership
-    const existing = await prisma.project.findFirst({
-      where: {
-        id: req.params.id,
-        userId: req.user!.id,
-      },
-    });
-
-    if (!existing) {
+    const hasAccess = await canAccessProject(req.user!.id, req.params.id);
+    if (!hasAccess) {
       throw new AppError('Project not found', 404);
     }
 
@@ -135,16 +183,24 @@ projectRouter.put('/:id', async (req: AuthRequest, res, next) => {
 // Delete project
 projectRouter.delete('/:id', async (req: AuthRequest, res, next) => {
   try {
-    // Verify ownership
-    const existing = await prisma.project.findFirst({
-      where: {
-        id: req.params.id,
-        userId: req.user!.id,
-      },
+    const existing = await prisma.project.findUnique({
+      where: { id: req.params.id },
+      select: { userId: true, organizationId: true },
     });
 
     if (!existing) {
       throw new AppError('Project not found', 404);
+    }
+
+    // Only the project owner or org OWNER/ADMIN can delete
+    if (existing.userId !== req.user!.id) {
+      if (!existing.organizationId) {
+        throw new AppError('Project not found', 404);
+      }
+      const role = await getUserRoleInOrg(req.user!.id, existing.organizationId);
+      if (!role || !['OWNER', 'ADMIN'].includes(role)) {
+        throw new AppError('Insufficient permissions', 403);
+      }
     }
 
     await prisma.project.delete({

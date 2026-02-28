@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard,
   FolderKanban,
+  Building2,
   LogOut,
   Menu,
   X,
@@ -14,6 +15,7 @@ import { CommandMenu } from './CommandMenu';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
+  { name: 'Organizations', href: '/organizations', icon: Building2 },
 ];
 
 export default function Layout() {
