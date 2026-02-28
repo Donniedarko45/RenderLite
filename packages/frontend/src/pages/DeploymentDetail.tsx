@@ -21,9 +21,9 @@ const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
 
 const statusColors: Record<string, string> = {
   QUEUED: 'bg-white/10 text-gray-300 border border-white/10',
-  BUILDING: 'bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.3)]',
-  SUCCESS: 'bg-green-500/20 text-[#00ff00] border border-green-500/20 shadow-[0_0_10px_rgba(0,255,0,0.2)]',
-  FAILED: 'bg-red-500/20 text-[#ff003c] border border-red-500/20 shadow-[0_0_10px_rgba(255,0,60,0.2)]',
+  BUILDING: 'bg-blue-500/20 text-blue-400 border border-blue-500/20',
+  SUCCESS: 'bg-green-500/20 text-[#00ff00] border border-green-500/20',
+  FAILED: 'bg-red-500/20 text-[#ff003c] border border-red-500/20',
 };
 
 const statusIcons: Record<string, React.ReactNode> = {
@@ -254,9 +254,9 @@ export default function DeploymentDetail() {
             Build Logs
           </h2>
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-[#ff003c]/80 shadow-[0_0_8px_rgba(255,0,60,0.5)]"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80 shadow-[0_0_8px_rgba(234,179,8,0.5)]"></div>
-            <div className="w-3 h-3 rounded-full bg-[#00ff00]/80 shadow-[0_0_8px_rgba(0,255,0,0.5)]"></div>
+            <div className="w-3 h-3 rounded-full bg-[#ff003c]/80"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+            <div className="w-3 h-3 rounded-full bg-[#00ff00]/80"></div>
           </div>
         </div>
         <div className="log-viewer min-h-[500px] border-none rounded-none p-6 font-mono text-[13px] leading-relaxed custom-scrollbar selection:bg-white/20 selection:text-white">

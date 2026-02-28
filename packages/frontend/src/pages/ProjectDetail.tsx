@@ -36,10 +36,10 @@ const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
 
 const statusColors: Record<string, string> = {
   CREATED: 'bg-white/10 text-gray-300 border border-white/10',
-  DEPLOYING: 'bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.3)]',
-  RUNNING: 'bg-green-500/20 text-[#00ff00] border border-green-500/20 shadow-[0_0_10px_rgba(0,255,0,0.2)]',
+  DEPLOYING: 'bg-blue-500/20 text-blue-400 border border-blue-500/20',
+  RUNNING: 'bg-green-500/20 text-[#00ff00] border border-green-500/20',
   STOPPED: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20',
-  FAILED: 'bg-red-500/20 text-[#ff003c] border border-red-500/20 shadow-[0_0_10px_rgba(255,0,60,0.2)]',
+  FAILED: 'bg-red-500/20 text-[#ff003c] border border-red-500/20',
 };
 
 export default function ProjectDetail() {
@@ -158,7 +158,7 @@ export default function ProjectDetail() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center justify-center px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 transition-all font-medium hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95"
+            className="flex items-center justify-center px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 transition-all font-medium active:scale-95"
           >
             <Plus className="w-5 h-5 mr-2" />
             New Service
@@ -184,7 +184,7 @@ export default function ProjectDetail() {
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-8 px-6 py-3 bg-white text-black rounded-lg hover:bg-gray-200 font-medium transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
+              className="mt-8 px-6 py-3 bg-white text-black rounded-lg hover:bg-gray-200 font-medium transition-colors active:scale-95"
             >
               <Plus className="w-5 h-5 mr-2 inline-block -mt-0.5" />
               New Service
@@ -239,7 +239,7 @@ export default function ProjectDetail() {
                     <button
                       onClick={() => deployMutation.mutate(service.id)}
                       disabled={deployMutation.isPending || service.status === 'DEPLOYING'}
-                      className="p-2 text-white bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg disabled:opacity-50 transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] active:scale-95"
+                      className="p-2 text-white bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg disabled:opacity-50 transition-all active:scale-95"
                       title="Deploy"
                     >
                       <Play className="w-4 h-4" />
@@ -273,13 +273,13 @@ export default function ProjectDetail() {
                         >
                           <div className="flex items-center">
                             {deployment.status === 'SUCCESS' && (
-                              <CheckCircle className="w-4 h-4 text-[#00ff00] mr-3 shadow-[0_0_10px_rgba(0,255,0,0.3)] rounded-full" />
+                              <CheckCircle className="w-4 h-4 text-[#00ff00] mr-3 rounded-full" />
                             )}
                             {deployment.status === 'FAILED' && (
-                              <XCircle className="w-4 h-4 text-[#ff003c] mr-3 shadow-[0_0_10px_rgba(255,0,60,0.3)] rounded-full" />
+                              <XCircle className="w-4 h-4 text-[#ff003c] mr-3 rounded-full" />
                             )}
                             {deployment.status === 'BUILDING' && (
-                              <Activity className="w-4 h-4 text-[#0070f3] mr-3 animate-pulse shadow-[0_0_10px_rgba(0,112,243,0.3)] rounded-full" />
+                              <Activity className="w-4 h-4 text-[#0070f3] mr-3 animate-pulse rounded-full" />
                             )}
                             {deployment.status === 'QUEUED' && (
                               <Clock className="w-4 h-4 text-gray-500 mr-3" />
@@ -373,7 +373,7 @@ export default function ProjectDetail() {
                   <button
                     type="submit"
                     disabled={createServiceMutation.isPending}
-                    className="px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium transition-all active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                    className="px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium transition-all active:scale-95"
                   >
                     {createServiceMutation.isPending ? 'Creating...' : 'Create Service'}
                   </button>

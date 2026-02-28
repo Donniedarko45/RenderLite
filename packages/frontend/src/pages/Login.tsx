@@ -53,7 +53,7 @@ export default function Login() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
-            className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+            className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6"
           >
             <span className="text-black font-bold text-3xl">R</span>
           </motion.div>
@@ -80,7 +80,7 @@ export default function Login() {
               whileTap={{ scale: 0.98 }}
               onClick={handleDevLogin}
               disabled={isDevLoginLoading}
-              className="w-full flex items-center justify-center px-4 py-3.5 bg-white text-black rounded-xl hover:bg-gray-200 transition-colors font-medium disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+              className="w-full flex items-center justify-center px-4 py-3.5 bg-white text-black rounded-xl hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
             >
               <User className="w-5 h-5 mr-3" />
               {isDevLoginLoading ? 'Signing in...' : 'Continue as Demo User'}
@@ -111,19 +111,19 @@ export default function Login() {
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Features</h3>
           <ul className="space-y-3 text-sm text-gray-300">
             <motion.li initial={{ opacity:0, x:-10 }} animate={{opacity:1, x:0}} transition={{delay:0.3}} className="flex items-center">
-              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3 shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3"></span>
               Deploy from GitHub repositories
             </motion.li>
             <motion.li initial={{ opacity:0, x:-10 }} animate={{opacity:1, x:0}} transition={{delay:0.4}} className="flex items-center">
-              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3 shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3"></span>
               Automatic container builds with Nixpacks
             </motion.li>
             <motion.li initial={{ opacity:0, x:-10 }} animate={{opacity:1, x:0}} transition={{delay:0.5}} className="flex items-center">
-              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3 shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3"></span>
               Real-time deployment logs
             </motion.li>
             <motion.li initial={{ opacity:0, x:-10 }} animate={{opacity:1, x:0}} transition={{delay:0.6}} className="flex items-center">
-              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3 shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
+              <span className="w-1.5 h-1.5 bg-white rounded-full mr-3"></span>
               Container metrics monitoring
             </motion.li>
           </ul>

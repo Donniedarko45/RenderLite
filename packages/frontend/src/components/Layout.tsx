@@ -38,18 +38,16 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-black/40 backdrop-blur-xl border-r border-white/5 transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0a0a0a] border-r border-white/5 transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full relative">
-          {/* Subtle gradient glow in sidebar */}
-          <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
 
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-white/5 relative z-10">
             <Link to="/" className="flex items-center space-x-3 group">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-all duration-300">
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center transition-all duration-300">
                 <span className="text-black font-extrabold text-lg">R</span>
               </div>
               <span className="font-extrabold text-xl text-white tracking-tight">RenderLite</span>
@@ -93,7 +91,7 @@ export default function Layout() {
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-white/5 bg-black/20 relative z-10 backdrop-blur-md">
+          <div className="p-4 border-t border-white/5 bg-[#0a0a0a] relative z-10">
             <div className="flex items-center space-x-3 rounded-xl p-2 hover:bg-white/5 transition-all duration-300 group cursor-pointer border border-transparent hover:border-white/5">
               {user?.avatarUrl ? (
                 <img
@@ -133,7 +131,7 @@ export default function Layout() {
         <CommandMenu />
         
         {/* Top bar (mobile only) */}
-        <div className="sticky top-0 z-30 h-16 bg-black/60 backdrop-blur-md border-b border-white/5 flex items-center px-4 lg:hidden">
+        <div className="sticky top-0 z-30 h-16 bg-[#0a0a0a] border-b border-white/5 flex items-center px-4 lg:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 text-gray-400 hover:text-white transition-colors"
@@ -145,9 +143,6 @@ export default function Layout() {
 
         {/* Page content */}
         <main className="flex-1 p-6 lg:p-10 relative">
-          {/* Subtle background glow for main content area */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[500px] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10" />
-          
           <div className="max-w-6xl mx-auto relative z-10">
             <AnimatePresence mode="wait">
               <Outlet key={location.pathname} />

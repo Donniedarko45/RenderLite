@@ -29,7 +29,7 @@ export const TabsTrigger = ({ className, value, children, ...props }: TabsPrimit
       {/* We use a sibling to render the active indicator */}
       {/* Actually, Radix doesn't support asChild like this easily for an internal div, we can just use CSS for the active border */}
     </TabsPrimitive.Trigger>
-    <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-white opacity-0 transition-opacity radix-state-active:opacity-100 shadow-[0_0_10px_rgba(255,255,255,0.5)]" />
+    <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-white opacity-0 transition-opacity radix-state-active:opacity-100" />
   </TabsPrimitive.Trigger>
 );
 
