@@ -3,6 +3,10 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { deploymentsApi } from '../api/client';
 import { subscribeToDeployment } from '../api/socket';
+import { PageTransition } from '../components/PageTransition';
+import { AnimatedCard } from '../components/AnimatedCard';
+import { Skeleton } from '../components/Skeleton';
+import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   CheckCircle,
@@ -16,17 +20,17 @@ import {
 const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
 
 const statusColors: Record<string, string> = {
-  QUEUED: 'bg-gray-100 text-gray-700',
-  BUILDING: 'bg-blue-100 text-blue-700',
-  SUCCESS: 'bg-green-100 text-green-700',
-  FAILED: 'bg-red-100 text-red-700',
+  QUEUED: 'bg-white/10 text-gray-300 border border-white/10',
+  BUILDING: 'bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.3)]',
+  SUCCESS: 'bg-green-500/20 text-[#00ff00] border border-green-500/20 shadow-[0_0_10px_rgba(0,255,0,0.2)]',
+  FAILED: 'bg-red-500/20 text-[#ff003c] border border-red-500/20 shadow-[0_0_10px_rgba(255,0,60,0.2)]',
 };
 
 const statusIcons: Record<string, React.ReactNode> = {
   QUEUED: <Clock className="w-5 h-5 text-gray-500" />,
-  BUILDING: <Activity className="w-5 h-5 text-blue-500 animate-pulse" />,
-  SUCCESS: <CheckCircle className="w-5 h-5 text-green-500" />,
-  FAILED: <XCircle className="w-5 h-5 text-red-500" />,
+  BUILDING: <Activity className="w-5 h-5 text-[#0070f3] animate-pulse" />,
+  SUCCESS: <CheckCircle className="w-5 h-5 text-[#00ff00]" />,
+  FAILED: <XCircle className="w-5 h-5 text-[#ff003c]" />,
 };
 
 export default function DeploymentDetail() {
@@ -92,22 +96,40 @@ export default function DeploymentDetail() {
 
   const getLogLineClass = (line: string) => {
     if (line.includes('❌') || line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')) {
-      return 'text-red-400';
+      return 'text-[#ff003c] font-bold';
     }
     if (line.includes('✅') || line.toLowerCase().includes('success')) {
-      return 'text-green-400';
+      return 'text-[#00ff00] font-bold';
     }
     if (line.includes('⚠️') || line.toLowerCase().includes('warning')) {
       return 'text-yellow-400';
     }
     if (line.includes('🚀') || line.includes('📦') || line.includes('📥') || line.includes('🔨') || line.includes('🐳')) {
-      return 'text-blue-400';
+      return 'text-[#0070f3]';
+    }
+    if (line.includes('STEP')) {
+      return 'text-white font-bold bg-white/10 px-2 py-0.5 rounded inline-block mt-2 mb-1';
     }
     return 'text-gray-300';
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-500">Loading...</div>;
+    return (
+      <PageTransition>
+        <div className="mb-8">
+          <Skeleton className="h-6 w-32 mb-6" />
+          <div className="flex justify-between">
+            <div>
+              <Skeleton className="h-10 w-64 mb-2" />
+              <Skeleton className="h-5 w-48" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+        </div>
+        <Skeleton className="h-32 w-full mb-8" />
+        <Skeleton className="h-96 w-full" />
+      </PageTransition>
+    );
   }
 
   if (!deployment) {
@@ -115,116 +137,150 @@ export default function DeploymentDetail() {
   }
 
   return (
-    <div>
+    <PageTransition>
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-10">
         <Link
           to={`/services/${deployment.service.id}`}
-          className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4"
+          className="inline-flex items-center text-sm text-gray-400 hover:text-white mb-6 transition-all hover:-translate-x-1"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" />
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
           Back to {deployment.service.name}
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">Deployment</h1>
+            <div className="flex items-center space-x-4">
+              <motion.h1 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60 tracking-tight"
+              >
+                Deployment
+              </motion.h1>
               <span
-                className={`px-3 py-1 text-xs font-medium rounded-full ${
+                className={`px-3 py-1.5 text-xs font-semibold tracking-wider rounded-md ${
                   statusColors[currentStatus || deployment.status]
                 }`}
               >
                 {currentStatus || deployment.status}
               </span>
             </div>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="flex flex-wrap items-center gap-5 mt-4 text-sm text-gray-400 font-medium"
+            >
               {deployment.commitSha && (
-                <span className="flex items-center">
-                  <GitCommit className="w-4 h-4 mr-1" />
+                <span className="flex items-center font-mono bg-white/5 px-2.5 py-1 rounded-md border border-white/10">
+                  <GitCommit className="w-4 h-4 mr-1.5" />
                   {deployment.commitSha.substring(0, 7)}
                 </span>
               )}
-              <span>
+              <span className="flex items-center">
+                <Clock className="w-4 h-4 mr-1.5 text-gray-500" />
                 Started: {new Date(deployment.createdAt).toLocaleString()}
               </span>
               {deployment.finishedAt && (
-                <span>
+                <span className="flex items-center">
+                  <CheckCircle className="w-4 h-4 mr-1.5 text-gray-500" />
                   Finished: {new Date(deployment.finishedAt).toLocaleString()}
                 </span>
               )}
-            </div>
+            </motion.div>
           </div>
-          <div className="flex items-center space-x-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex items-center space-x-4 bg-[#111]/80 backdrop-blur-sm border border-white/10 px-5 py-3 rounded-xl shadow-inner"
+          >
             {statusIcons[currentStatus || deployment.status]}
             {(currentStatus || deployment.status) === 'SUCCESS' && (
               <a
                 href={`http://${deployment.service.subdomain}.${BASE_DOMAIN}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                className="flex items-center text-sm font-medium text-white hover:text-gray-300 ml-4 border-l border-white/10 pl-4 transition-colors group"
               >
-                <ExternalLink className="w-5 h-5 mr-2" />
+                <ExternalLink className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
                 View App
               </a>
             )}
-          </div>
+          </motion.div>
         </div>
       </div>
 
       {/* Service Info */}
-      <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Service Info</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-sm text-gray-500">Service</p>
-            <p className="font-medium text-gray-900">{deployment.service.name}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Repository</p>
-            <a
-              href={deployment.service.repoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-primary-600 hover:text-primary-700"
-            >
-              View on GitHub
-            </a>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Branch</p>
-            <p className="font-medium text-gray-900">{deployment.service.branch}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Subdomain</p>
-            <p className="font-medium text-gray-900">{deployment.service.subdomain}</p>
-          </div>
+      <AnimatedCard delay={0.3} className="mb-8">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5">Service Info</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Service</p>
+              <p className="font-semibold text-white text-base">{deployment.service.name}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Repository</p>
+              <a
+                href={deployment.service.repoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-white text-base hover:underline decoration-white/30 underline-offset-4 transition-all"
+              >
+                View on GitHub
+              </a>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Branch</p>
+              <p className="font-semibold text-white text-base font-mono">{deployment.service.branch}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-widest">Subdomain</p>
+              <p className="font-semibold text-white text-base font-mono">{deployment.service.subdomain}</p>
+            </div>
         </div>
-      </div>
+      </AnimatedCard>
 
       {/* Logs */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="px-6 py-4 border-b bg-gray-50">
-          <h2 className="text-lg font-semibold text-gray-900">Build Logs</h2>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-[#0a0a0a] rounded-xl border border-white/10 overflow-hidden shadow-2xl"
+      >
+        <div className="px-6 py-4 border-b border-white/10 bg-[#111] flex items-center justify-between">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center">
+            <Activity className="w-4 h-4 mr-2" />
+            Build Logs
+          </h2>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 rounded-full bg-[#ff003c]/80 shadow-[0_0_8px_rgba(255,0,60,0.5)]"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500/80 shadow-[0_0_8px_rgba(234,179,8,0.5)]"></div>
+            <div className="w-3 h-3 rounded-full bg-[#00ff00]/80 shadow-[0_0_8px_rgba(0,255,0,0.5)]"></div>
+          </div>
         </div>
-        <div className="log-viewer min-h-[300px]">
+        <div className="log-viewer min-h-[500px] border-none rounded-none p-6 font-mono text-[13px] leading-relaxed custom-scrollbar selection:bg-white/20 selection:text-white">
           {allLogs.length === 0 ? (
-            <div className="text-gray-500 text-center py-8">
-              {currentStatus === 'QUEUED'
-                ? 'Waiting for build to start...'
-                : 'No logs available'}
+            <div className="h-full flex flex-col items-center justify-center py-20">
+              <Activity className="w-10 h-10 text-gray-600 mb-4 animate-pulse" />
+              <p className="text-gray-400 font-medium font-sans">
+                {currentStatus === 'QUEUED'
+                  ? 'Waiting for build to start...'
+                  : 'Initializing build environment...'}
+              </p>
             </div>
           ) : (
-            <>
+            <div className="space-y-0.5">
               {allLogs.map((line, index) => (
-                <div key={index} className={`log-line ${getLogLineClass(line)}`}>
+                <div key={index} className={`log-line ${getLogLineClass(line)} hover:bg-white/[0.02] -mx-2 px-2 rounded transition-colors`}>
                   {line}
                 </div>
               ))}
-              <div ref={logsEndRef} />
-            </>
+              <div ref={logsEndRef} className="h-4" />
+            </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </PageTransition>
   );
 }

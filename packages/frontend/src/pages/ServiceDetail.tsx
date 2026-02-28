@@ -3,6 +3,10 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { servicesApi, deploymentsApi, metricsApi } from '../api/client';
 import { subscribeToService } from '../api/socket';
+import { PageTransition } from '../components/PageTransition';
+import { AnimatedCard } from '../components/AnimatedCard';
+import { Skeleton } from '../components/Skeleton';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Play,
@@ -17,23 +21,26 @@ import {
   Settings,
 } from 'lucide-react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  AreaChart,
+  Area,
 } from 'recharts';
+import { toast } from 'sonner';
+
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/Tabs';
 
 const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
 
 const statusColors: Record<string, string> = {
-  CREATED: 'bg-gray-100 text-gray-700',
-  DEPLOYING: 'bg-blue-100 text-blue-700',
-  RUNNING: 'bg-green-100 text-green-700',
-  STOPPED: 'bg-yellow-100 text-yellow-700',
-  FAILED: 'bg-red-100 text-red-700',
+  CREATED: 'bg-white/10 text-gray-300 border border-white/10',
+  DEPLOYING: 'bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.3)]',
+  RUNNING: 'bg-green-500/20 text-[#00ff00] border border-green-500/20 shadow-[0_0_10px_rgba(0,255,0,0.2)]',
+  STOPPED: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20',
+  FAILED: 'bg-red-500/20 text-[#ff003c] border border-red-500/20 shadow-[0_0_10px_rgba(255,0,60,0.2)]',
 };
 
 export default function ServiceDetail() {
@@ -63,7 +70,11 @@ export default function ServiceDetail() {
     mutationFn: () => deploymentsApi.trigger(serviceId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service', serviceId] });
+      toast.success('Deployment triggered');
     },
+    onError: () => {
+      toast.error('Failed to trigger deployment');
+    }
   });
 
   const updateServiceMutation = useMutation({
@@ -71,7 +82,11 @@ export default function ServiceDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service', serviceId] });
       setShowEnvModal(false);
+      toast.success('Service updated successfully');
     },
+    onError: () => {
+      toast.error('Failed to update service');
+    }
   });
 
   // Subscribe to real-time metrics
@@ -125,7 +140,27 @@ export default function ServiceDetail() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-500">Loading...</div>;
+    return (
+      <PageTransition>
+        <div className="mb-8">
+          <Skeleton className="h-6 w-32 mb-6" />
+          <div className="flex justify-between">
+            <div>
+              <Skeleton className="h-10 w-64 mb-2" />
+              <Skeleton className="h-5 w-48" />
+            </div>
+            <div className="flex space-x-3">
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-96 w-full" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </PageTransition>
+    );
   }
 
   if (!service) {
@@ -135,242 +170,301 @@ export default function ServiceDetail() {
   const displayStatus = currentStatus || service.status;
 
   return (
-    <div>
+    <PageTransition>
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-10">
         <Link
           to={`/projects/${service.project.id}`}
-          className="flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4"
+          className="inline-flex items-center text-sm text-gray-400 hover:text-white mb-6 transition-all hover:-translate-x-1"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" />
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
           Back to {service.project.name}
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">{service.name}</h1>
+            <div className="flex items-center space-x-4">
+              <motion.h1 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60 tracking-tight"
+              >
+                {service.name}
+              </motion.h1>
               <span
-                className={`px-3 py-1 text-xs font-medium rounded-full ${
+                className={`px-3 py-1.5 text-xs font-semibold tracking-wider rounded-md ${
                   statusColors[displayStatus]
                 }`}
               >
                 {displayStatus}
               </span>
             </div>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-              <span className="flex items-center">
-                <GitBranch className="w-4 h-4 mr-1" />
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="flex flex-wrap items-center gap-5 mt-4 text-sm text-gray-400 font-semibold tracking-wide"
+            >
+              <span className="flex items-center bg-white/5 px-2.5 py-1 rounded-md border border-white/10">
+                <GitBranch className="w-4 h-4 mr-1.5" />
                 {service.branch}
               </span>
               <a
                 href={service.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center hover:text-primary-600"
+                className="flex items-center hover:text-white transition-colors"
               >
-                <ExternalLink className="w-4 h-4 mr-1" />
+                <ExternalLink className="w-4 h-4 mr-1.5" />
                 Repository
               </a>
               <a
                 href={`http://${service.subdomain}.${BASE_DOMAIN}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center hover:text-primary-600"
+                className="flex items-center text-gray-300 hover:text-white transition-colors bg-black/50 px-3 py-1 rounded-md border border-white/5"
               >
-                <ExternalLink className="w-4 h-4 mr-1" />
+                <ExternalLink className="w-4 h-4 mr-1.5" />
                 {`${service.subdomain}.${BASE_DOMAIN}`}
               </a>
-            </div>
+            </motion.div>
           </div>
-          <div className="flex items-center space-x-2">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex items-center space-x-3"
+          >
             <button
               onClick={() => setShowEnvModal(true)}
-              className="flex items-center px-4 py-2 border rounded-lg hover:bg-gray-50"
+              className="flex items-center px-4 py-2.5 bg-transparent border border-white/20 text-white rounded-lg hover:bg-white/5 transition-all font-medium active:scale-95"
             >
-              <Settings className="w-5 h-5 mr-2" />
+              <Settings className="w-4 h-4 mr-2" />
               Environment
             </button>
             <button
               onClick={() => deployMutation.mutate()}
               disabled={deployMutation.isPending || displayStatus === 'DEPLOYING'}
-              className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-all font-medium hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95"
             >
-              <Play className="w-5 h-5 mr-2" />
+              <Play className="w-4 h-4 mr-2" />
               Deploy
             </button>
-          </div>
+          </motion.div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Metrics */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Metrics</h2>
-          {displayStatus !== 'RUNNING' ? (
-            <div className="text-center py-8 text-gray-500">
-              Service is not running. Deploy to see metrics.
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center text-gray-500 mb-1">
-                    <Cpu className="w-4 h-4 mr-2" />
-                    CPU Usage
-                  </div>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {metrics?.metrics?.cpuPercent?.toFixed(1) || 0}%
-                  </p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center text-gray-500 mb-1">
-                    <HardDrive className="w-4 h-4 mr-2" />
-                    Memory Usage
-                  </div>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {metrics?.metrics?.memoryPercent?.toFixed(1) || 0}%
-                  </p>
-                </div>
-              </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="deployments">Deployments</TabsTrigger>
+        </TabsList>
 
-              {metricsHistory.length > 1 && (
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={metricsHistory}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Line
-                        type="monotone"
-                        dataKey="cpuPercent"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        name="CPU %"
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="memoryPercent"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        name="Memory %"
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 gap-6">
+            {/* Metrics */}
+            <AnimatedCard delay={0.3} className="flex flex-col h-[420px]">
+              <h2 className="text-xl font-bold text-white mb-6 tracking-tight">Metrics</h2>
+              {displayStatus !== 'RUNNING' ? (
+                <div className="flex-1 flex items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl bg-black/30">
+                  Service is not running. Deploy to see metrics.
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Deployments */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Deployment History
-          </h2>
-          {service.deployments?.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No deployments yet
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {service.deployments?.map((deployment: any) => (
-                <Link
-                  key={deployment.id}
-                  to={`/deployments/${deployment.id}`}
-                  className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center">
-                    {deployment.status === 'SUCCESS' && (
-                      <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    )}
-                    {deployment.status === 'FAILED' && (
-                      <XCircle className="w-5 h-5 text-red-500 mr-3" />
-                    )}
-                    {deployment.status === 'BUILDING' && (
-                      <Activity className="w-5 h-5 text-blue-500 mr-3 animate-pulse" />
-                    )}
-                    {deployment.status === 'QUEUED' && (
-                      <Clock className="w-5 h-5 text-gray-400 mr-3" />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {deployment.commitSha?.substring(0, 7) || 'No commit'}
+              ) : (
+                <div className="flex-1 flex flex-col space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-5 bg-black border border-white/5 rounded-xl shadow-inner relative overflow-hidden group">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#0070f3]/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-center text-gray-400 mb-2 font-medium">
+                        <Cpu className="w-4 h-4 mr-2 text-[#0070f3]" />
+                        CPU Usage
+                      </div>
+                      <p className="text-3xl font-bold text-white tracking-tight">
+                        {metrics?.metrics?.cpuPercent?.toFixed(1) || 0}<span className="text-xl text-gray-500">%</span>
                       </p>
-                      <p className="text-xs text-gray-500">{deployment.status}</p>
+                    </div>
+                    <div className="p-5 bg-black border border-white/5 rounded-xl shadow-inner relative overflow-hidden group">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#00ff00]/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-center text-gray-400 mb-2 font-medium">
+                        <HardDrive className="w-4 h-4 mr-2 text-[#00ff00]" />
+                        Memory Usage
+                      </div>
+                      <p className="text-3xl font-bold text-white tracking-tight">
+                        {metrics?.metrics?.memoryPercent?.toFixed(1) || 0}<span className="text-xl text-gray-500">%</span>
+                      </p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400">
-                    {new Date(deployment.createdAt).toLocaleString()}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+
+                  {metricsHistory.length > 1 && (
+                    <div className="flex-1 min-h-[150px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metricsHistory} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#0070f3" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#0070f3" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorMemory" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#00ff00" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#00ff00" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                          <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#666' }} stroke="#333" axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: '#666' }} stroke="#333" axisLine={false} tickLine={false} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', borderColor: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px' }} 
+                            itemStyle={{ color: '#fff' }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="cpuPercent"
+                            stroke="#0070f3"
+                            strokeWidth={2}
+                            fillOpacity={1}
+                            fill="url(#colorCpu)"
+                            name="CPU %"
+                            activeDot={{ r: 4, strokeWidth: 0, fill: '#0070f3' }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="memoryPercent"
+                            stroke="#00ff00"
+                            strokeWidth={2}
+                            fillOpacity={1}
+                            fill="url(#colorMemory)"
+                            name="Memory %"
+                            activeDot={{ r: 4, strokeWidth: 0, fill: '#00ff00' }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+            </AnimatedCard>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="deployments">
+          {/* Deployments */}
+          <AnimatedCard delay={0.1} className="flex flex-col min-h-[420px]">
+            <h2 className="text-xl font-bold text-white mb-6 tracking-tight">
+              Deployment History
+            </h2>
+            {service.deployments?.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl bg-black/30">
+                No deployments yet
+              </div>
+            ) : (
+              <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
+                {service.deployments?.map((deployment: any) => (
+                  <Link
+                    key={deployment.id}
+                    to={`/deployments/${deployment.id}`}
+                    className="flex items-center justify-between p-4 bg-black border border-white/5 hover:border-white/20 rounded-xl transition-all duration-300 group hover:bg-white/[0.02]"
+                  >
+                    <div className="flex items-center">
+                      {deployment.status === 'SUCCESS' && (
+                        <CheckCircle className="w-5 h-5 text-[#00ff00] mr-4 shadow-[0_0_10px_rgba(0,255,0,0.2)] rounded-full" />
+                      )}
+                      {deployment.status === 'FAILED' && (
+                        <XCircle className="w-5 h-5 text-[#ff003c] mr-4 shadow-[0_0_10px_rgba(255,0,60,0.2)] rounded-full" />
+                      )}
+                      {deployment.status === 'BUILDING' && (
+                        <Activity className="w-5 h-5 text-[#0070f3] mr-4 animate-pulse shadow-[0_0_10px_rgba(0,112,243,0.2)] rounded-full" />
+                      )}
+                      {deployment.status === 'QUEUED' && (
+                        <Clock className="w-5 h-5 text-gray-500 mr-4" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors font-mono">
+                          {deployment.commitSha?.substring(0, 7) || 'No commit'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider font-semibold">{deployment.status}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">
+                      {new Date(deployment.createdAt).toLocaleString()}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </AnimatedCard>
+        </TabsContent>
+      </Tabs>
 
       {/* Environment Variables Modal */}
-      {showEnvModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg mx-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Environment Variables
-            </h2>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {envVars.map((env, index) => (
-                <div key={index} className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={env.key}
-                    onChange={(e) => {
-                      const newVars = [...envVars];
-                      newVars[index].key = e.target.value;
-                      setEnvVars(newVars);
-                    }}
-                    placeholder="KEY"
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                  />
-                  <input
-                    type="text"
-                    value={env.value}
-                    onChange={(e) => {
-                      const newVars = [...envVars];
-                      newVars[index].value = e.target.value;
-                      setEnvVars(newVars);
-                    }}
-                    placeholder="value"
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                  />
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setEnvVars([...envVars, { key: '', value: '' }])}
-              className="mt-3 text-sm text-primary-600 hover:text-primary-700"
+      <AnimatePresence>
+        {showEnvModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-[#111] border border-white/10 rounded-2xl shadow-2xl p-8 w-full max-w-2xl mx-4 relative overflow-hidden"
             >
-              + Add variable
-            </button>
-            <div className="flex justify-end space-x-3 mt-6">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+              <h2 className="text-2xl font-bold text-white mb-6 tracking-tight">
+                Environment Variables
+              </h2>
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                {envVars.map((env, index) => (
+                  <div key={index} className="flex space-x-3 group">
+                    <input
+                      type="text"
+                      value={env.key}
+                      onChange={(e) => {
+                        const newVars = [...envVars];
+                        newVars[index].key = e.target.value;
+                        setEnvVars(newVars);
+                      }}
+                      placeholder="KEY"
+                      className="flex-1 px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={env.value}
+                      onChange={(e) => {
+                        const newVars = [...envVars];
+                        newVars[index].value = e.target.value;
+                        setEnvVars(newVars);
+                      }}
+                      placeholder="value"
+                      className="flex-[2] px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
               <button
-                onClick={() => setShowEnvModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-900"
+                onClick={() => setEnvVars([...envVars, { key: '', value: '' }])}
+                className="mt-6 px-4 py-2.5 text-sm font-medium text-gray-300 bg-white/5 hover:bg-white/10 rounded-lg transition-all border border-white/5 w-full hover:border-white/20 active:scale-[0.98]"
               >
-                Cancel
+                + Add Variable
               </button>
-              <button
-                onClick={handleSaveEnvVars}
-                disabled={updateServiceMutation.isPending}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
-                {updateServiceMutation.isPending ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+              <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-white/10">
+                <button
+                  onClick={() => setShowEnvModal(false)}
+                  className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors font-medium rounded-lg hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEnvVars}
+                  disabled={updateServiceMutation.isPending}
+                  className="px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium transition-all active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                >
+                  {updateServiceMutation.isPending ? 'Saving...' : 'Save Variables'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </PageTransition>
   );
 }
