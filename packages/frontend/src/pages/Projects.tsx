@@ -86,7 +86,7 @@ export default function Projects() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center px-4 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 transition-all duration-300 font-medium hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95"
+          className="flex items-center px-4 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 transition-all duration-300 font-medium active:scale-95"
         >
           <Plus className="w-5 h-5 mr-2" />
           New Project
@@ -121,7 +121,7 @@ export default function Projects() {
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-8 px-6 py-3 bg-white text-black rounded-lg hover:bg-gray-200 font-medium transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
+              className="mt-8 px-6 py-3 bg-white text-black rounded-lg hover:bg-gray-200 font-medium transition-colors active:scale-95"
             >
               Create New Project
             </button>

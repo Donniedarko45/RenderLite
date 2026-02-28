@@ -97,7 +97,7 @@ export default function Dashboard() {
                   </p>
                 )}
               </div>
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10">
                 <stat.icon className="w-5 h-5 text-gray-300" />
               </div>
             </div>
