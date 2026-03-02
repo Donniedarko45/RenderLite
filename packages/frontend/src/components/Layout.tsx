@@ -130,17 +130,17 @@ export default function Layout() {
 
       {/* Main content */}
       <div className="lg:pl-64 flex flex-col min-h-screen">
-        <CommandMenu />
-        
-        {/* Top bar (mobile only) */}
-        <div className="sticky top-0 z-30 h-16 bg-[#0a0a0a] border-b border-white/5 flex items-center px-4 lg:hidden">
+        {/* Top bar */}
+        <div className="sticky top-0 z-30 h-14 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/5 flex items-center px-4 lg:px-10">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
+            className="p-2 text-gray-400 hover:text-white transition-colors lg:hidden"
           >
             <Menu className="w-6 h-6" />
           </button>
-          <span className="ml-4 font-semibold text-white tracking-tight">RenderLite</span>
+          <span className="ml-4 font-semibold text-white tracking-tight lg:hidden">RenderLite</span>
+          <div className="flex-1" />
+          <CommandMenu />
         </div>
 
         {/* Page content */}

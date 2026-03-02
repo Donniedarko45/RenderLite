@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { deploymentsApi } from '../api/client';
 import { subscribeToDeployment } from '../api/socket';
 import { PageTransition } from '../components/PageTransition';
@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Copy,
   Lock,
-  Unlock
+  Unlock,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -39,10 +40,20 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 export default function DeploymentDetail() {
   const { deploymentId } = useParams<{ deploymentId: string }>();
+  const queryClient = useQueryClient();
   const [liveLogs, setLiveLogs] = useState<string[]>([]);
   const [currentStatus, setCurrentStatus] = useState<string>('');
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const rollbackMutation = useMutation({
+    mutationFn: () => deploymentsApi.rollback(deploymentId!),
+    onSuccess: () => {
+      toast.success('Rollback triggered -- a new deployment has been created');
+      queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Rollback failed'),
+  });
 
   const { data: deployment, isLoading, refetch } = useQuery({
     queryKey: ['deployment', deploymentId],
@@ -206,15 +217,26 @@ export default function DeploymentDetail() {
           >
             {statusIcons[currentStatus || deployment?.status || 'QUEUED']}
             {(currentStatus || deployment?.status) === 'SUCCESS' && (
-              <a
-                href={`http://${deployment?.service?.subdomain}.${BASE_DOMAIN}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center text-sm font-medium text-white hover:text-gray-300 ml-4 border-l border-white/10 pl-4 transition-colors group"
-              >
-                <ExternalLink className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
-                View App
-              </a>
+              <>
+                <button
+                  onClick={() => rollbackMutation.mutate()}
+                  disabled={rollbackMutation.isPending}
+                  className="flex items-center text-sm font-medium text-gray-400 hover:text-white ml-4 border-l border-white/10 pl-4 transition-colors disabled:opacity-50"
+                  title="Rollback to this deployment"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  {rollbackMutation.isPending ? 'Rolling back...' : 'Rollback'}
+                </button>
+                <a
+                  href={`http://${deployment?.service?.subdomain}.${BASE_DOMAIN}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center text-sm font-medium text-white hover:text-gray-300 ml-4 border-l border-white/10 pl-4 transition-colors group"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
+                  View App
+                </a>
+              </>
             )}
           </motion.div>
         </div>

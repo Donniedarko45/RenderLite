@@ -30,7 +30,7 @@ export function CommandMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hidden md:flex items-center text-sm text-gray-400 bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all absolute top-6 right-10 z-50 group"
+        className="hidden lg:flex items-center text-sm text-gray-400 bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all group"
       >
         <Search className="w-4 h-4 mr-2 text-gray-500 group-hover:text-white transition-colors" />
         <span className="mr-4">Search...</span>
