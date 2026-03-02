@@ -145,7 +145,7 @@ export default function Layout() {
 
         {/* Page content */}
         <main className="flex-1 p-6 lg:p-10 relative">
-          <div className="max-w-6xl mx-auto relative z-10">
+          <div className="max-w-7xl mx-auto relative z-10 w-full">
             <AnimatePresence mode="wait">
               <Outlet key={location.pathname} />
             </AnimatePresence>
