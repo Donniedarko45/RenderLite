@@ -176,14 +176,12 @@ export function CommandMenu() {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-xl bg-[#0d0d0d] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
             >
-              <Command
-                value={search}
-                onValueChange={setSearch}
-                shouldFilter={true}
-                filter={cmdkFilter}
-                className="cmdk"
-                loop
-              >
+             <Command
+  shouldFilter
+  filter={cmdkFilter}
+  className="cmdk"
+  loop
+>
                 <div className="flex items-center border-b border-white/10 px-4 gap-3">
                   <Search className="w-5 h-5 text-gray-500 shrink-0" />
                   <Command.Input
