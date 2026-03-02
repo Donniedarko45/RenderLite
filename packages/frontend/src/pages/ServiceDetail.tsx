@@ -586,3 +586,118 @@ export default function ServiceDetail() {
     </PageTransition>
   );
 }
+
+/* ---- Domains sub-tab ---- */
+function DomainsTab({ serviceId }: { serviceId: string }) {
+  const queryClient = useQueryClient();
+  const [newDomain, setNewDomain] = useState('');
+
+  const { data: domains, isLoading } = useQuery({
+    queryKey: ['domains', serviceId],
+    queryFn: () => domainsApi.list(serviceId).then((r) => r.data),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: () => domainsApi.add(serviceId, newDomain),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['domains', serviceId] });
+      setNewDomain('');
+      toast.success('Domain added. Follow DNS instructions to verify.');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to add domain'),
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: (id: string) => domainsApi.verify(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['domains', serviceId] });
+      if (res.data.verified) {
+        toast.success('Domain verified!');
+      } else {
+        toast.error(res.data.message || 'Verification failed');
+      }
+    },
+    onError: () => toast.error('Verification failed'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => domainsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['domains', serviceId] });
+      toast.success('Domain removed');
+    },
+    onError: () => toast.error('Failed to remove domain'),
+  });
+
+  return (
+    <AnimatedCard delay={0.1}>
+      <h2 className="text-xl font-bold text-white mb-6 tracking-tight flex items-center">
+        <Globe className="w-5 h-5 mr-2 text-gray-400" />
+        Custom Domains
+      </h2>
+
+      <div className="flex items-center space-x-3 mb-6">
+        <input
+          type="text"
+          value={newDomain}
+          onChange={(e) => setNewDomain(e.target.value)}
+          placeholder="app.example.com"
+          className="flex-1 px-4 py-3 bg-black border border-white/10 rounded-xl text-white font-mono text-sm placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none"
+        />
+        <button
+          onClick={() => addMutation.mutate()}
+          disabled={!newDomain || addMutation.isPending}
+          className="flex items-center px-5 py-3 bg-white text-black rounded-xl hover:bg-gray-200 disabled:opacity-50 font-medium text-sm transition-all active:scale-95"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add
+        </button>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : domains?.length === 0 ? (
+        <p className="text-gray-500 text-sm text-center py-8 border border-dashed border-white/10 rounded-xl">No custom domains. Add one above.</p>
+      ) : (
+        <div className="space-y-3">
+          {domains?.map((d: any) => (
+            <div key={d.id} className="flex items-center justify-between p-4 bg-black border border-white/5 rounded-xl group hover:border-white/10 transition-all">
+              <div className="flex items-center space-x-3">
+                {d.verified ? (
+                  <ShieldCheck className="w-5 h-5 text-green-400" />
+                ) : (
+                  <ShieldAlert className="w-5 h-5 text-yellow-400" />
+                )}
+                <div>
+                  <p className="text-sm font-mono text-white">{d.hostname}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {d.verified ? 'Verified' : `Pending - Add TXT record: _renderlite-verify.${d.hostname}`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {!d.verified && (
+                  <button onClick={() => verifyMutation.mutate(d.id)} disabled={verifyMutation.isPending} className="px-3 py-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all">
+                    Verify
+                  </button>
+                )}
+                {!d.verified && (
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(d.verificationToken); toast.success('Token copied'); }}
+                    className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                    title="Copy verification token"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={() => deleteMutation.mutate(d.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition-colors rounded-lg hover:bg-red-400/10 opacity-0 group-hover:opacity-100">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </AnimatedCard>
+  );
+}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectsApi, servicesApi, deploymentsApi } from '../api/client';
+import { projectsApi, servicesApi, deploymentsApi, databasesApi } from '../api/client';
 import { PageTransition } from '../components/PageTransition';
 import { AnimatedCard } from '../components/AnimatedCard';
 import { Skeleton } from '../components/Skeleton';
@@ -20,6 +20,8 @@ import {
   MoreVertical,
   Settings,
   ChevronRight,
+  Database,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
@@ -69,6 +71,9 @@ export default function ProjectDetail() {
   const [deleteServiceId, setDeleteServiceId] = useState<string | null>(null);
   const [deleteServiceName, setDeleteServiceName] = useState('');
   const [confirmName, setConfirmName] = useState('');
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [dbName, setDbName] = useState('');
+  const [dbType, setDbType] = useState('POSTGRES');
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
@@ -120,6 +125,26 @@ export default function ProjectDetail() {
     }
   });
 
+  const createDbMutation = useMutation({
+    mutationFn: () => databasesApi.create({ name: dbName, projectId: projectId!, type: dbType }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setShowDbModal(false);
+      setDbName('');
+      toast.success('Database provisioning started');
+    },
+    onError: () => toast.error('Failed to create database'),
+  });
+
+  const deleteDbMutation = useMutation({
+    mutationFn: (id: string) => databasesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      toast.success('Database deleted');
+    },
+    onError: () => toast.error('Failed to delete database'),
+  });
+
   const onSubmit = (data: ServiceFormData) => {
     createServiceMutation.mutate(data);
   };
@@ -167,14 +192,20 @@ export default function ProjectDetail() {
             >
               {project.name}
             </motion.h1>
-            <motion.p 
+            <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="text-gray-400 mt-2 text-lg"
+              className="flex items-center gap-3 mt-2"
             >
-              {project.services?.length || 0} services
-            </motion.p>
+              <span className="text-gray-400 text-lg">{project.services?.length || 0} services</span>
+              {project.organization && (
+                <Link to={`/organizations/${project.organization.id}`} className="flex items-center px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-400 hover:text-white hover:border-white/20 transition-all">
+                  <Building2 className="w-3.5 h-3.5 mr-1.5" />
+                  {project.organization.name}
+                </Link>
+              )}
+            </motion.div>
           </div>
           <motion.button
             initial={{ opacity: 0, scale: 0.9 }}
@@ -344,6 +375,81 @@ export default function ProjectDetail() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Databases Section */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
+            <Database className="w-6 h-6 mr-3 text-gray-400" />
+            Databases
+          </h2>
+          <button onClick={() => setShowDbModal(true)} className="flex items-center px-4 py-2 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-all font-medium text-sm active:scale-95">
+            <Plus className="w-4 h-4 mr-2" />
+            New Database
+          </button>
+        </div>
+        {project.databases?.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-white/10 rounded-xl text-gray-500 text-sm">
+            No databases. Provision a managed Postgres, Redis, or MySQL instance.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {project.databases?.map((db: any) => (
+              <AnimatedCard key={db.id} className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-2.5 bg-white/5 rounded-xl border border-white/10">
+                    <Database className="w-5 h-5 text-gray-300" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{db.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{db.type} &middot; {db.status}</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className={`px-2.5 py-1 text-xs font-semibold tracking-wider rounded-md ${db.status === 'RUNNING' ? 'bg-green-500/20 text-green-400 border border-green-500/20' : db.status === 'PROVISIONING' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' : 'bg-red-500/20 text-red-400 border border-red-500/20'}`}>
+                    {db.status}
+                  </span>
+                  <button onClick={() => deleteDbMutation.mutate(db.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition-colors rounded-lg hover:bg-red-400/10">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </AnimatedCard>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create Database Modal */}
+      <AnimatePresence>
+        {showDbModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-[#111] border border-white/10 rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+              <h2 className="text-2xl font-bold text-white mb-6 tracking-tight">Provision Database</h2>
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Name</label>
+                  <input type="text" value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="my-database" className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none" autoFocus />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Type</label>
+                  <select value={dbType} onChange={(e) => setDbType(e.target.value)} className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none">
+                    <option value="POSTGRES">PostgreSQL</option>
+                    <option value="REDIS">Redis</option>
+                    <option value="MYSQL">MySQL</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 pt-6 border-t border-white/10 mt-8">
+                <button onClick={() => { setShowDbModal(false); setDbName(''); }} className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors font-medium rounded-lg hover:bg-white/5">Cancel</button>
+                <button onClick={() => createDbMutation.mutate()} disabled={!dbName || createDbMutation.isPending} className="px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium transition-all active:scale-95">
+                  {createDbMutation.isPending ? 'Creating...' : 'Provision'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Create Service Modal */}
       <AnimatePresence>
