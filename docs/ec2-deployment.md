@@ -167,6 +167,7 @@ External checks:
 - **TLS cert not issued**: DNS not pointing correctly, or port 80/443 blocked.
 - **Traefik logs `Host(\`\`)` / `no domain was given`**: environment variables were not loaded. Always run with `docker compose --env-file .env.ec2 -f docker-compose.prod.yml ...` and verify `APP_HOST`, `API_HOST`, `TRAEFIK_DASHBOARD_HOST`, and `ACME_EMAIL` are set in `.env.ec2`.
 - **OAuth fails**: callback URL mismatch or wrong client secret.
+- **Service stuck in `DEPLOYING` with deployment `QUEUED`**: worker is not consuming queue jobs (or Redis was restarted and queue was lost). Check `docker compose --env-file .env.ec2 -f docker-compose.prod.yml ps` and `docker compose --env-file .env.ec2 -f docker-compose.prod.yml logs --tail=200 worker`.
 - **Worker deploys fail**: verify `/var/run/docker.sock` mount and worker container status.
 - **DB auth errors**: `POSTGRES_PASSWORD` and `DATABASE_URL` are inconsistent.
 - **Prisma `P2021` (`table public.User does not exist`)**: schema was not applied. Re-run `bash deploy/ec2/deploy.sh` so it applies Prisma schema before starting app services.
