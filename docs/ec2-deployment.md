@@ -165,6 +165,7 @@ External checks:
 ## Common issues
 
 - **TLS cert not issued**: DNS not pointing correctly, or port 80/443 blocked.
+- **Traefik logs `Host(\`\`)` / `no domain was given`**: environment variables were not loaded. Always run with `docker compose --env-file .env.ec2 -f docker-compose.prod.yml ...` and verify `APP_HOST`, `API_HOST`, `TRAEFIK_DASHBOARD_HOST`, and `ACME_EMAIL` are set in `.env.ec2`.
 - **OAuth fails**: callback URL mismatch or wrong client secret.
 - **Worker deploys fail**: verify `/var/run/docker.sock` mount and worker container status.
 - **DB auth errors**: `POSTGRES_PASSWORD` and `DATABASE_URL` are inconsistent.

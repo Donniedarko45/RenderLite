@@ -11,7 +11,7 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL is required}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--api.dashboard=true"
@@ -28,13 +28,13 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_DASHBOARD_HOST}`)"
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_DASHBOARD_HOST:?TRAEFIK_DASHBOARD_HOST is required}`)"
       - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls=true"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       - "traefik.http.routers.traefik.service=api@internal"
       - "traefik.http.routers.traefik.middlewares=traefik-auth"
-      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH:?TRAEFIK_DASHBOARD_AUTH is required}"
 
   postgres:
     image: postgres:15-alpine
@@ -78,16 +78,16 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 3001
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      GITHUB_CALLBACK_URL: https://${API_HOST}/auth/github/callback
-      JWT_SECRET: ${JWT_SECRET}
-      FRONTEND_URL: https://${APP_HOST}
-      API_URL: https://${API_HOST}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      BASE_DOMAIN: ${BASE_DOMAIN}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID is required}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET is required}
+      GITHUB_CALLBACK_URL: https://${API_HOST:?API_HOST is required}/auth/github/callback
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      FRONTEND_URL: https://${APP_HOST:?APP_HOST is required}
+      API_URL: https://${API_HOST:?API_HOST is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
       ENABLE_TLS: "true"
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       DEV_AUTH_EMAIL: ${DEV_AUTH_EMAIL:-dev@renderlite.local}
@@ -102,7 +102,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`${API_HOST}`)"
+      - "traefik.http.routers.api.rule=Host(`${API_HOST:?API_HOST is required}`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
@@ -116,9 +116,9 @@ services:
     container_name: renderlite-worker
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      BASE_DOMAIN: ${BASE_DOMAIN}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
       ENABLE_TLS: "true"
     depends_on:
       postgres:
@@ -136,9 +136,9 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        VITE_API_URL: https://${API_HOST}
-        VITE_SOCKET_URL: https://${API_HOST}
-        VITE_BASE_DOMAIN: ${BASE_DOMAIN}
+        VITE_API_URL: https://${API_HOST:?API_HOST is required}
+        VITE_SOCKET_URL: https://${API_HOST:?API_HOST is required}
+        VITE_BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
         VITE_DEV_AUTH_ENABLED: ${VITE_DEV_AUTH_ENABLED:-false}
     container_name: renderlite-frontend
     depends_on:
@@ -149,7 +149,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`${APP_HOST}`)"
+      - "traefik.http.routers.frontend.rule=Host(`${APP_HOST:?APP_HOST is required}`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
