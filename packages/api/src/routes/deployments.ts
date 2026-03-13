@@ -131,6 +131,7 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
     if (!service) {
       throw new AppError('Service not found', 404);
     }
+    const previousServiceStatus = service.status;
 
     const deployment = await prisma.deployment.create({
       data: {
@@ -146,9 +147,28 @@ deploymentRouter.post('/', async (req: AuthRequest, res, next) => {
 
     const jobData = await buildDeploymentJobData(service, deployment.id, req.user!.id);
 
-    await buildQueue.add(`deploy-${deployment.id}`, jobData, {
-      jobId: deployment.id,
-    });
+    try {
+      await buildQueue.add(`deploy-${deployment.id}`, jobData, {
+        jobId: deployment.id,
+      });
+    } catch (error) {
+      const queueError = error instanceof Error ? error.message : 'Unknown queue error';
+      await prisma.$transaction([
+        prisma.deployment.update({
+          where: { id: deployment.id },
+          data: {
+            status: DeploymentStatus.FAILED,
+            logs: `Failed to enqueue deployment job: ${queueError}`,
+            finishedAt: new Date(),
+          },
+        }),
+        prisma.service.update({
+          where: { id: serviceId },
+          data: { status: previousServiceStatus },
+        }),
+      ]);
+      throw new AppError('Deployment queue is unavailable. Please retry.', 503);
+    }
 
     const socketHandlers = req.app.get('socketHandlers') as SocketHandlers | undefined;
     socketHandlers?.emitDeploymentStatus(deployment.id, DeploymentStatus.QUEUED);
@@ -274,6 +294,7 @@ deploymentRouter.post('/:id/rollback', async (req: AuthRequest, res, next) => {
     }
 
     const service = targetDeployment.service;
+    const previousServiceStatus = service.status;
 
     const newDeployment = await prisma.deployment.create({
       data: {
@@ -305,9 +326,28 @@ deploymentRouter.post('/:id/rollback', async (req: AuthRequest, res, next) => {
       healthCheckTimeout: service.healthCheckTimeout,
     };
 
-    await rollbackQueue.add(`rollback-${newDeployment.id}`, rollbackData, {
-      jobId: newDeployment.id,
-    });
+    try {
+      await rollbackQueue.add(`rollback-${newDeployment.id}`, rollbackData, {
+        jobId: newDeployment.id,
+      });
+    } catch (error) {
+      const queueError = error instanceof Error ? error.message : 'Unknown queue error';
+      await prisma.$transaction([
+        prisma.deployment.update({
+          where: { id: newDeployment.id },
+          data: {
+            status: DeploymentStatus.FAILED,
+            logs: `Failed to enqueue rollback job: ${queueError}`,
+            finishedAt: new Date(),
+          },
+        }),
+        prisma.service.update({
+          where: { id: service.id },
+          data: { status: previousServiceStatus },
+        }),
+      ]);
+      throw new AppError('Rollback queue is unavailable. Please retry.', 503);
+    }
 
     const socketHandlers = req.app.get('socketHandlers') as SocketHandlers | undefined;
     socketHandlers?.emitDeploymentStatus(newDeployment.id, DeploymentStatus.QUEUED);

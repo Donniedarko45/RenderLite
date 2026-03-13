@@ -142,12 +142,73 @@ export async function cleanupFailedDeployments(olderThanHours: number = 24): Pro
 }
 
 /**
+ * Mark deployments as failed if they stay queued for too long.
+ * This recovers services when Redis/worker was unavailable and jobs were never consumed.
+ */
+export async function cleanupStaleQueuedDeployments(staleMinutes: number = 15): Promise<number> {
+  console.log(`🧹 Cleaning up queued deployments older than ${staleMinutes} minutes...`);
+
+  const cutoffDate = new Date(Date.now() - staleMinutes * 60 * 1000);
+  let markedFailed = 0;
+
+  try {
+    const staleQueuedDeployments = await prisma.deployment.findMany({
+      where: {
+        status: 'QUEUED',
+        createdAt: { lt: cutoffDate },
+      },
+      select: {
+        id: true,
+        serviceId: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const deployment of staleQueuedDeployments) {
+      const latestDeployment = await prisma.deployment.findFirst({
+        where: { serviceId: deployment.serviceId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+
+      await prisma.deployment.update({
+        where: { id: deployment.id },
+        data: {
+          status: 'FAILED',
+          logs: `Deployment remained queued for more than ${staleMinutes} minutes. Marked as failed automatically.`,
+          finishedAt: new Date(),
+        },
+      });
+
+      // Only change service status when this stale deployment is still the latest attempt.
+      if (latestDeployment?.id === deployment.id) {
+        await prisma.service.updateMany({
+          where: {
+            id: deployment.serviceId,
+            status: 'DEPLOYING',
+          },
+          data: { status: 'FAILED' },
+        });
+      }
+      markedFailed++;
+    }
+
+    console.log(`✅ Marked ${markedFailed} stale queued deployments as failed`);
+    return markedFailed;
+  } catch (error) {
+    console.error('❌ Stale queued deployment cleanup failed:', error);
+    throw error;
+  }
+}
+
+/**
  * Run all cleanup tasks
  */
 export async function runAllCleanupTasks(): Promise<void> {
   console.log('\n🧹 Running all cleanup tasks...\n');
   
   await cleanupOrphanedContainers();
+  await cleanupStaleQueuedDeployments(15);
   await cleanupOldDeployments(10);
   await cleanupFailedDeployments(24);
   

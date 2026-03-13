@@ -72,6 +72,7 @@ webhookRouter.post('/github/:serviceId', async (req: Request, res: Response) => 
     if (branch !== service.branch) {
       return res.status(204).send();
     }
+    const previousServiceStatus = service.status;
 
     // Trigger deployment
     const deployment = await prisma.deployment.create({
@@ -116,9 +117,28 @@ webhookRouter.post('/github/:serviceId', async (req: Request, res: Response) => 
       healthCheckTimeout: service.healthCheckTimeout,
     };
 
-    await buildQueue.add(`deploy-${deployment.id}`, jobData, {
-      jobId: deployment.id,
-    });
+    try {
+      await buildQueue.add(`deploy-${deployment.id}`, jobData, {
+        jobId: deployment.id,
+      });
+    } catch (error) {
+      const queueError = error instanceof Error ? error.message : 'Unknown queue error';
+      await prisma.$transaction([
+        prisma.deployment.update({
+          where: { id: deployment.id },
+          data: {
+            status: DeploymentStatus.FAILED,
+            logs: `Failed to enqueue deployment job: ${queueError}`,
+            finishedAt: new Date(),
+          },
+        }),
+        prisma.service.update({
+          where: { id: service.id },
+          data: { status: previousServiceStatus },
+        }),
+      ]);
+      return res.status(503).json({ error: 'Deployment queue is unavailable' });
+    }
 
     const socketHandlers = req.app.get('socketHandlers') as SocketHandlers | undefined;
     socketHandlers?.emitDeploymentStatus(deployment.id, DeploymentStatus.QUEUED);
