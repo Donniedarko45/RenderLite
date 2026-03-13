@@ -37,6 +37,59 @@ function isLocalNixpacksMissing(error: any): boolean {
   );
 }
 
+async function runDockerizedNixpacksBuild(
+  sourceDir: string,
+  cacheDir: string,
+  imageName: string,
+  log: LogCallback
+): Promise<void> {
+  const baseCommandParts = [
+    'docker run --rm',
+    '-v /var/run/docker.sock:/var/run/docker.sock',
+    `-v "${sourceDir}:/app"`,
+    `-v "${cacheDir}:/cache"`,
+    '-w /app',
+  ];
+  const buildArgs = `build /app --name "${imageName}" --cache-key "${imageName.split(':')[0]}"`;
+  const imageNameRef = 'ghcr.io/railwayapp/nixpacks:latest';
+  const entrypointCandidates = ['nixpacks', '/nixpacks', '/usr/local/bin/nixpacks'];
+
+  let lastError: any;
+
+  for (const entrypoint of entrypointCandidates) {
+    const command = [
+      ...baseCommandParts,
+      `--entrypoint ${entrypoint}`,
+      imageNameRef,
+      buildArgs,
+    ].join(' ');
+
+    try {
+      await runNixpacksBuild(command, log);
+      return;
+    } catch (error: any) {
+      lastError = error;
+    }
+  }
+
+  // Legacy invocation for images that already define ENTRYPOINT.
+  const legacyCommand = [...baseCommandParts, imageNameRef, buildArgs].join(' ');
+  try {
+    await runNixpacksBuild(legacyCommand, log);
+    return;
+  } catch (error: any) {
+    lastError = error;
+  }
+
+  if (lastError?.killed) {
+    throw new Error('Build timed out');
+  }
+
+  throw new Error(
+    `Nixpacks build failed with Dockerized fallback: ${lastError?.message || 'Unknown error'}`
+  );
+}
+
 /**
  * Build image using Nixpacks with persistent cache volume
  */
@@ -68,24 +121,7 @@ export async function buildWithNixpacks(
     }
 
     log('   [WARN] Local nixpacks not found, using Dockerized Nixpacks fallback');
-    const dockerizedCommand = [
-      'docker run --rm',
-      '-v /var/run/docker.sock:/var/run/docker.sock',
-      `-v "${sourceDir}:/app"`,
-      `-v "${cacheDir}:/cache"`,
-      '-w /app',
-      'ghcr.io/railwayapp/nixpacks:latest',
-      `build /app --name "${imageName}" --cache-key "${imageName.split(':')[0]}"`,
-    ].join(' ');
-
-    try {
-      await runNixpacksBuild(dockerizedCommand, log);
-    } catch (fallbackError: any) {
-      if (fallbackError.killed) {
-        throw new Error('Build timed out');
-      }
-      throw new Error(`Nixpacks build failed with Dockerized fallback: ${fallbackError.message}`);
-    }
+    await runDockerizedNixpacksBuild(sourceDir, cacheDir, imageName, log);
   }
 }
 
