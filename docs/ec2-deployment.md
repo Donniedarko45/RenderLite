@@ -169,3 +169,4 @@ External checks:
 - **OAuth fails**: callback URL mismatch or wrong client secret.
 - **Worker deploys fail**: verify `/var/run/docker.sock` mount and worker container status.
 - **DB auth errors**: `POSTGRES_PASSWORD` and `DATABASE_URL` are inconsistent.
+- **Prisma `P2021` (`table public.User does not exist`)**: schema was not applied. Re-run `bash deploy/ec2/deploy.sh` so it applies Prisma schema before starting app services.
