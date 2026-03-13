@@ -393,9 +393,9 @@ export default function ProjectDetail() {
                         <Link
                           key={deployment.id}
                           to={`/deployments/${deployment.id}`}
-                          className="flex items-center justify-between text-sm p-3 bg-black/30 hover:bg-white/5 rounded-lg border border-transparent hover:border-white/10 transition-all duration-300 group"
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm p-3 bg-black/30 hover:bg-white/5 rounded-lg border border-transparent hover:border-white/10 transition-all duration-300 group"
                         >
-                          <div className="flex items-center">
+                          <div className="flex items-center min-w-0">
                             {deployment.status === 'SUCCESS' && (
                               <CheckCircle className="w-4 h-4 text-[#00ff00] mr-3 rounded-full" />
                             )}
@@ -408,12 +408,15 @@ export default function ProjectDetail() {
                             {deployment.status === 'QUEUED' && (
                               <Clock className="w-4 h-4 text-gray-500 mr-3" />
                             )}
-                            <span className="text-gray-400 font-mono group-hover:text-white transition-colors">
+                            <span className="text-gray-400 font-mono group-hover:text-white transition-colors truncate">
                               {deployment.commitSha?.substring(0, 7) || 'No commit'}
                             </span>
                           </div>
-                          <span className="text-gray-500 group-hover:text-gray-400 transition-colors">
-                            {new Date(deployment.createdAt).toLocaleString()}
+                          <span className="text-gray-500 group-hover:text-gray-400 transition-colors text-xs sm:text-sm self-start sm:self-auto whitespace-nowrap">
+                            {new Date(deployment.createdAt).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })}
                           </span>
                         </Link>
                       ))}

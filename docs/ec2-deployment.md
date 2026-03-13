@@ -171,6 +171,7 @@ External checks:
 - **Worker crash with `PrismaClientInitializationError` (`debian-openssl-3.0.x`)**: rebuild and restart `api` + `worker` images so Prisma client is generated for the container runtime.
 - **Worker crash with Prisma `P2025` on deployment update**: stale/orphaned queue jobs are being processed after deployment records were removed. Pull latest code and rebuild worker; it now skips orphaned jobs safely and no longer exits.
 - **Nixpacks fallback fails with `exec: "build": executable file not found`**: worker used an outdated Dockerized Nixpacks invocation. Pull latest code and rebuild `worker`; it now tries explicit Nixpacks entrypoints compatible with current images.
+- **Deployment fails with `Build timed out`**: increase `BUILD_TIMEOUT_MS` in `.env.ec2` (for example `1800000` for 30 minutes), then rebuild/restart `worker`.
 - **Worker deploys fail**: verify `/var/run/docker.sock` mount and worker container status.
 - **DB auth errors**: `POSTGRES_PASSWORD` and `DATABASE_URL` are inconsistent.
 - **Prisma `P2021` (`table public.User does not exist`)**: schema was not applied. Re-run `bash deploy/ec2/deploy.sh` so it applies Prisma schema before starting app services.
