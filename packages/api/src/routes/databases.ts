@@ -40,7 +40,7 @@ databaseRouter.get('/', async (req: AuthRequest, res, next) => {
     });
 
     res.json(
-      databases.map((db) => ({
+      databases.map((db: any) => ({
         ...db,
         password: db.password ? '********' : null,
       }))

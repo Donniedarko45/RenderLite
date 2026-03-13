@@ -14,10 +14,10 @@ COPY packages ./packages
 
 ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/renderlite?schema=public
 
-RUN npm run build -w @renderlite/shared \
+RUN npx prisma generate --schema packages/api/prisma/schema.prisma \
+  && npm run build -w @renderlite/shared \
   && npm run build -w @renderlite/api \
-  && npm run build -w @renderlite/worker \
-  && npx prisma generate --schema packages/api/prisma/schema.prisma
+  && npm run build -w @renderlite/worker
 
 FROM node:20-bookworm-slim AS runtime-base
 

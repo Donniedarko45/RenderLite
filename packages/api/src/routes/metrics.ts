@@ -126,7 +126,7 @@ metricsRouter.get('/overview', async (req: AuthRequest, res, next) => {
       },
     });
 
-    const deploymentsByStatus = deploymentStats.reduce((acc, item) => {
+    const deploymentsByStatus = deploymentStats.reduce((acc: any, item: any) => {
       acc[item.status] = item._count;
       return acc;
     }, {} as Record<string, number>);
