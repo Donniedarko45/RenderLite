@@ -72,9 +72,16 @@ if [ "$POSTGRES_READY" -ne 1 ]; then
   exit 1
 fi
 
-echo "==> Running Prisma migrations"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm api \
-  npx prisma migrate deploy --schema packages/api/prisma/schema.prisma
+echo "==> Applying database schema"
+if compgen -G "packages/api/prisma/migrations/*/migration.sql" >/dev/null; then
+  echo "==> Found Prisma migrations, running migrate deploy"
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm api \
+    npx prisma migrate deploy --schema packages/api/prisma/schema.prisma
+else
+  echo "==> No Prisma migrations found, running db push fallback"
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm api \
+    npx prisma db push --schema packages/api/prisma/schema.prisma
+fi
 
 echo "==> Starting app services"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans api worker frontend
