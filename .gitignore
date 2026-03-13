@@ -47,3 +47,6 @@ packages/api/src/generated/
 
 # Vite
 packages/frontend/.vite/
+SushmitaKeyPair.pem
+SushmitaKeyPair.pem.Zone.Identifier
+SushmitaKeyPair.pem:Zone.Identifier
