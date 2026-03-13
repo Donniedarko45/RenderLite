@@ -131,6 +131,12 @@ npm run dev:stack
 - Production frontend is `packages/frontend`.
 - `apps/dashboard` is a legacy/experimental app and is not required for the main MiniPaas flow.
 
+## Production Deployment (EC2)
+
+- Production stack file: `docker-compose.prod.yml`
+- CI/CD pipeline: `.github/workflows/deploy-ec2.yml`
+- Full runbook (AWS, DNS, secrets, first deploy, verification): `docs/ec2-deployment.md`
+
 ## Project Structure
 
 ```

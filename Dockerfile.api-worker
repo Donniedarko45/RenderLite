@@ -1,0 +1,40 @@
+FROM node:20-bookworm-slim AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/api/package.json ./packages/api/package.json
+COPY packages/worker/package.json ./packages/worker/package.json
+COPY packages/frontend/package.json ./packages/frontend/package.json
+
+RUN npm ci
+
+COPY packages ./packages
+
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/renderlite?schema=public
+
+RUN npm run build -w @renderlite/shared \
+  && npm run build -w @renderlite/api \
+  && npm run build -w @renderlite/worker \
+  && npx prisma generate --schema packages/api/prisma/schema.prisma
+
+FROM node:20-bookworm-slim AS runtime-base
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=build /app /app
+
+FROM runtime-base AS api
+
+EXPOSE 3001
+CMD ["node", "packages/api/dist/index.js"]
+
+FROM runtime-base AS worker
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends docker.io git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+CMD ["node", "packages/worker/dist/index.js"]
