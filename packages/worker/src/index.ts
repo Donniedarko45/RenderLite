@@ -62,7 +62,7 @@ async function handleJobCompleted(
 ): Promise<void> {
   if (!result.success) {
     const failureLog = result.logs || `Deployment failed: ${result.error || 'Unknown error'}`;
-    await prisma.deployment.update({
+    const deploymentUpdate = await prisma.deployment.updateMany({
       where: { id: jobData.deploymentId },
       data: {
         status: DeploymentStatus.FAILED,
@@ -70,16 +70,29 @@ async function handleJobCompleted(
         finishedAt: new Date(),
       },
     });
-    await prisma.service.update({
-      where: { id: jobData.serviceId },
+
+    if (deploymentUpdate.count === 0) {
+      console.warn(
+        `[WARN] Skipping completion update: deployment ${jobData.deploymentId} no longer exists`
+      );
+      return;
+    }
+
+    const serviceUpdate = await prisma.service.updateMany({
+      where: {
+        id: jobData.serviceId,
+        status: ServiceStatus.DEPLOYING,
+      },
       data: { status: ServiceStatus.FAILED },
     });
     await publishDeploymentStatus(jobData.deploymentId, DeploymentStatus.FAILED);
-    await publishServiceStatus(jobData.serviceId, ServiceStatus.FAILED);
+    if (serviceUpdate.count > 0) {
+      await publishServiceStatus(jobData.serviceId, ServiceStatus.FAILED);
+    }
     return;
   }
 
-  await prisma.deployment.update({
+  const deploymentUpdate = await prisma.deployment.updateMany({
     where: { id: jobData.deploymentId },
     data: {
       status: DeploymentStatus.SUCCESS,
@@ -89,8 +102,18 @@ async function handleJobCompleted(
     },
   });
 
-  await prisma.service.update({
-    where: { id: jobData.serviceId },
+  if (deploymentUpdate.count === 0) {
+    console.warn(
+      `[WARN] Skipping completion update: deployment ${jobData.deploymentId} no longer exists`
+    );
+    return;
+  }
+
+  const serviceUpdate = await prisma.service.updateMany({
+    where: {
+      id: jobData.serviceId,
+      status: ServiceStatus.DEPLOYING,
+    },
     data: {
       status: ServiceStatus.RUNNING,
       containerId: result.containerId,
@@ -98,7 +121,9 @@ async function handleJobCompleted(
   });
 
   await publishDeploymentStatus(jobData.deploymentId, DeploymentStatus.SUCCESS, result.containerId);
-  await publishServiceStatus(jobData.serviceId, ServiceStatus.RUNNING);
+  if (serviceUpdate.count > 0) {
+    await publishServiceStatus(jobData.serviceId, ServiceStatus.RUNNING);
+  }
 }
 
 async function handleJobFailed(
@@ -107,7 +132,7 @@ async function handleJobFailed(
 ): Promise<void> {
   if (!jobData) return;
 
-  await prisma.deployment.update({
+  const deploymentUpdate = await prisma.deployment.updateMany({
     where: { id: jobData.deploymentId },
     data: {
       status: DeploymentStatus.FAILED,
@@ -115,12 +140,25 @@ async function handleJobFailed(
       finishedAt: new Date(),
     },
   });
-  await prisma.service.update({
-    where: { id: jobData.serviceId },
+
+  if (deploymentUpdate.count === 0) {
+    console.warn(
+      `[WARN] Skipping failed update: deployment ${jobData.deploymentId} no longer exists`
+    );
+    return;
+  }
+
+  const serviceUpdate = await prisma.service.updateMany({
+    where: {
+      id: jobData.serviceId,
+      status: ServiceStatus.DEPLOYING,
+    },
     data: { status: ServiceStatus.FAILED },
   });
   await publishDeploymentStatus(jobData.deploymentId, DeploymentStatus.FAILED);
-  await publishServiceStatus(jobData.serviceId, ServiceStatus.FAILED);
+  if (serviceUpdate.count > 0) {
+    await publishServiceStatus(jobData.serviceId, ServiceStatus.FAILED);
+  }
 }
 
 function createLogCallback(
@@ -162,12 +200,20 @@ const buildWorker = new Worker<DeploymentJobData, DeploymentJobResult>(
 
 buildWorker.on('completed', async (job, result) => {
   console.log(`Build job ${job.id} completed (success=${result.success})`);
-  await handleJobCompleted(job.data, result);
+  try {
+    await handleJobCompleted(job.data, result);
+  } catch (error) {
+    console.error(`Failed to finalize build job ${job.id}:`, error);
+  }
 });
 
 buildWorker.on('failed', async (job, error) => {
   console.error(`Build job ${job?.id} failed:`, error.message);
-  await handleJobFailed(job?.data, error);
+  try {
+    await handleJobFailed(job?.data, error);
+  } catch (finalizeError) {
+    console.error(`Failed to finalize failed build job ${job?.id}:`, finalizeError);
+  }
 });
 
 buildWorker.on('error', (err) => console.error('Build worker error:', err));
@@ -194,12 +240,20 @@ const rollbackWorker = new Worker<RollbackJobData, DeploymentJobResult>(
 
 rollbackWorker.on('completed', async (job, result) => {
   console.log(`Rollback job ${job.id} completed (success=${result.success})`);
-  await handleJobCompleted(job.data, result);
+  try {
+    await handleJobCompleted(job.data, result);
+  } catch (error) {
+    console.error(`Failed to finalize rollback job ${job.id}:`, error);
+  }
 });
 
 rollbackWorker.on('failed', async (job, error) => {
   console.error(`Rollback job ${job?.id} failed:`, error.message);
-  await handleJobFailed(job?.data, error);
+  try {
+    await handleJobFailed(job?.data, error);
+  } catch (finalizeError) {
+    console.error(`Failed to finalize failed rollback job ${job?.id}:`, finalizeError);
+  }
 });
 
 rollbackWorker.on('error', (err) => console.error('Rollback worker error:', err));

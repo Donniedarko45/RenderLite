@@ -56,6 +56,8 @@ export const servicesApi = {
     healthCheckInterval?: number;
     healthCheckTimeout?: number;
   }) => api.post('/api/services', data),
+  listGitHubRepos: (q?: string, page: number = 1, perPage: number = 50) =>
+    api.get('/api/services/github/repos', { params: { q, page, perPage } }),
   update: (id: string, data: any) => api.put(`/api/services/${id}`, data),
   delete: (id: string) => api.delete(`/api/services/${id}`),
 };

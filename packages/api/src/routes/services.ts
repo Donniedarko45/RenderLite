@@ -4,11 +4,22 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateSubdomain } from '../utils/subdomain.js';
-import { encryptEnvVars } from '../utils/encryption.js';
+import { decrypt, encryptEnvVars } from '../utils/encryption.js';
 import Docker from 'dockerode';
 
 export const serviceRouter = Router();
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const GITHUB_API_BASE_URL = 'https://api.github.com';
+
+type GitHubRepository = {
+  id: number;
+  name: string;
+  full_name: string;
+  html_url: string;
+  private: boolean;
+  default_branch: string;
+  updated_at: string;
+};
 
 function normalizeAndEncryptEnvVars(rawEnvVars: unknown): Record<string, string> | null {
   if (rawEnvVars === null || rawEnvVars === undefined) {
@@ -57,6 +68,152 @@ function maskEnvVars(rawEnvVars: unknown): Record<string, string> | null {
   return Object.keys(masked).length > 0 ? masked : null;
 }
 
+async function getGitHubAccessToken(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { githubAccessToken: true },
+  });
+
+  if (!user?.githubAccessToken) {
+    return null;
+  }
+
+  try {
+    return decrypt(user.githubAccessToken);
+  } catch {
+    return null;
+  }
+}
+
+function getGitHubHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'renderlite-api',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+async function requestGitHub<T>(
+  path: string,
+  token?: string
+): Promise<{ status: number; data: T | null }> {
+  const response = await fetch(`${GITHUB_API_BASE_URL}${path}`, {
+    headers: getGitHubHeaders(token),
+  });
+
+  if (!response.ok) {
+    return { status: response.status, data: null };
+  }
+
+  const data = (await response.json()) as T;
+  return { status: response.status, data };
+}
+
+function parseGitHubRepoUrl(rawRepoUrl: string): {
+  owner: string;
+  repo: string;
+  normalizedUrl: string;
+} {
+  let url: URL;
+  try {
+    url = new URL(rawRepoUrl.trim());
+  } catch {
+    throw new AppError('Invalid GitHub repository URL', 400);
+  }
+
+  const host = url.hostname.toLowerCase();
+  if (host !== 'github.com' && host !== 'www.github.com') {
+    throw new AppError('Repository must be hosted on github.com', 400);
+  }
+
+  const parts = url.pathname
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '')
+    .split('/')
+    .filter(Boolean);
+
+  if (parts.length !== 2) {
+    throw new AppError('Repository URL must look like https://github.com/<owner>/<repo>', 400);
+  }
+
+  const [owner, repo] = parts;
+
+  if (!owner || !repo) {
+    throw new AppError('Invalid GitHub repository URL', 400);
+  }
+
+  return {
+    owner,
+    repo,
+    normalizedUrl: `https://github.com/${owner}/${repo}`,
+  };
+}
+
+async function verifyGitHubRepository(
+  owner: string,
+  repo: string,
+  githubToken: string | null
+): Promise<GitHubRepository> {
+  const lookup = await requestGitHub<GitHubRepository>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    githubToken ?? undefined
+  );
+
+  if (lookup.data) {
+    return lookup.data;
+  }
+
+  if (lookup.status === 404) {
+    throw new AppError(
+      githubToken
+        ? 'Repository not found or not accessible with your GitHub account'
+        : 'Repository not found. Sign in with GitHub again for private repositories.',
+      400
+    );
+  }
+
+  if (lookup.status === 401 || lookup.status === 403) {
+    throw new AppError(
+      'GitHub access token is unavailable or lacks permission. Sign in with GitHub again.',
+      400
+    );
+  }
+
+  throw new AppError('Failed to verify repository with GitHub. Please try again.', 502);
+}
+
+async function verifyGitHubBranchExists(
+  owner: string,
+  repo: string,
+  branch: string,
+  githubToken: string | null
+): Promise<void> {
+  const lookup = await requestGitHub<Record<string, unknown>>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/${encodeURIComponent(branch)}`,
+    githubToken ?? undefined
+  );
+
+  if (lookup.data) {
+    return;
+  }
+
+  if (lookup.status === 404) {
+    throw new AppError(`Branch "${branch}" was not found in the selected repository`, 400);
+  }
+
+  if (lookup.status === 401 || lookup.status === 403) {
+    throw new AppError('Unable to verify branch with GitHub. Please sign in again and retry.', 400);
+  }
+
+  throw new AppError('Failed to verify branch with GitHub. Please try again.', 502);
+}
+
 serviceRouter.use(authenticate);
 
 // List services
@@ -88,6 +245,75 @@ serviceRouter.get('/', async (req: AuthRequest, res, next) => {
         envVars: maskEnvVars(service.envVars),
       }))
     );
+  } catch (error) {
+    next(error);
+  }
+});
+
+// List GitHub repositories for authenticated user (owner repos only)
+serviceRouter.get('/github/repos', async (req: AuthRequest, res, next) => {
+  try {
+    const q = (typeof req.query.q === 'string' ? req.query.q : '').trim().toLowerCase();
+    const page = Math.max(1, Number.parseInt(String(req.query.page ?? '1'), 10) || 1);
+    const perPage = Math.min(
+      100,
+      Math.max(1, Number.parseInt(String(req.query.perPage ?? '50'), 10) || 50)
+    );
+
+    const githubToken = await getGitHubAccessToken(req.user!.id);
+    if (!githubToken) {
+      return res.json({
+        repositories: [],
+        page,
+        perPage,
+        hasMore: false,
+        requiresReconnect: true,
+      });
+    }
+
+    const response = await requestGitHub<GitHubRepository[]>(
+      `/user/repos?affiliation=owner&sort=updated&direction=desc&per_page=${perPage}&page=${page}`,
+      githubToken
+    );
+
+    if (response.status === 401 || response.status === 403) {
+      return res.json({
+        repositories: [],
+        page,
+        perPage,
+        hasMore: false,
+        requiresReconnect: true,
+      });
+    }
+
+    if (!response.data) {
+      throw new AppError('Failed to fetch repositories from GitHub', 502);
+    }
+
+    const repositories = response.data
+      .filter((repo) => {
+        if (!q) return true;
+        return (
+          repo.name.toLowerCase().includes(q) || repo.full_name.toLowerCase().includes(q)
+        );
+      })
+      .map((repo) => ({
+        id: repo.id,
+        name: repo.name,
+        fullName: repo.full_name,
+        htmlUrl: repo.html_url.replace(/\/+$/, ''),
+        private: repo.private,
+        defaultBranch: repo.default_branch || 'main',
+        updatedAt: repo.updated_at,
+      }));
+
+    res.json({
+      repositories,
+      page,
+      perPage,
+      hasMore: response.data.length === perPage,
+      requiresReconnect: false,
+    });
   } catch (error) {
     next(error);
   }
@@ -166,10 +392,15 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
       throw new AppError('Project not found', 404);
     }
 
-    const githubUrlPattern = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+(?:\.git)?$/;
-    if (!githubUrlPattern.test(repoUrl)) {
-      throw new AppError('Invalid GitHub repository URL', 400);
+    const { owner, repo } = parseGitHubRepoUrl(repoUrl);
+    const githubToken = await getGitHubAccessToken(req.user!.id);
+    const verifiedRepo = await verifyGitHubRepository(owner, repo, githubToken);
+
+    const selectedBranch = typeof branch === 'string' ? branch.trim() : '';
+    if (selectedBranch) {
+      await verifyGitHubBranchExists(owner, repo, selectedBranch, githubToken);
     }
+    const finalBranch = selectedBranch || verifiedRepo.default_branch || 'main';
 
     const subdomain = await generateSubdomain(name);
     const webhookSecret = crypto.randomBytes(32).toString('hex');
@@ -181,8 +412,8 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
       data: {
         name: name.trim(),
         projectId,
-        repoUrl: repoUrl.replace(/\.git$/, ''),
-        branch: branch || 'main',
+        repoUrl: verifiedRepo.html_url.replace(/\/+$/, ''),
+        branch: finalBranch,
         runtime: runtime || null,
         subdomain,
         envVars: encryptedEnvVars as any,

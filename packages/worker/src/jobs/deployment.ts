@@ -23,10 +23,19 @@ export async function processDeployment(
   };
 
   try {
-    await prisma.deployment.update({
+    const deploymentStarted = await prisma.deployment.updateMany({
       where: { id: data.deploymentId },
       data: { status: 'BUILDING', startedAt: new Date() },
     });
+
+    if (deploymentStarted.count === 0) {
+      appendLog('[WARN] Deployment record no longer exists. Skipping stale queue job.');
+      return {
+        success: false,
+        error: 'Deployment record not found',
+        logs,
+      };
+    }
 
     appendLog('==> Starting deployment...');
 
@@ -45,10 +54,20 @@ export async function processDeployment(
     const commitSha = await getLatestCommitSha(workDir);
     appendLog(`    Info: Commit: ${commitSha.substring(0, 7)}`);
 
-    await prisma.deployment.update({
+    const commitSaved = await prisma.deployment.updateMany({
       where: { id: data.deploymentId },
       data: { commitSha },
     });
+
+    if (commitSaved.count === 0) {
+      appendLog('[WARN] Deployment record was removed while processing. Aborting deployment.');
+      await fs.rm(workDir, { recursive: true, force: true });
+      return {
+        success: false,
+        error: 'Deployment record not found',
+        logs,
+      };
+    }
 
     // Step 2: Build image
     const imageTag = `renderlite-${data.subdomain}:${commitSha.substring(0, 7)}`;
@@ -67,10 +86,20 @@ export async function processDeployment(
     appendLog('    Done: Image built successfully');
 
     // Save imageTag for rollbacks
-    await prisma.deployment.update({
+    const imageSaved = await prisma.deployment.updateMany({
       where: { id: data.deploymentId },
       data: { imageTag },
     });
+
+    if (imageSaved.count === 0) {
+      appendLog('[WARN] Deployment record was removed while processing. Aborting deployment.');
+      await fs.rm(workDir, { recursive: true, force: true });
+      return {
+        success: false,
+        error: 'Deployment record not found',
+        logs,
+      };
+    }
 
     // Step 3: Fetch verified custom domains for Traefik routing
     const domains = await prisma.domain.findMany({
