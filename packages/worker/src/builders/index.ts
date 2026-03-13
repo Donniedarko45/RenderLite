@@ -50,7 +50,7 @@ async function runDockerizedNixpacksBuild(
     `-v "${cacheDir}:/cache"`,
     '-w /app',
   ];
-  const buildArgs = `build /app --name "${imageName}" --cache-key "${imageName.split(':')[0]}"`;
+  const nixpacksArgs = `build /app --name "${imageName}" --cache-key "${imageName.split(':')[0]}"`;
   const imageNameRef = 'ghcr.io/railwayapp/nixpacks:latest';
   const entrypointCandidates = ['nixpacks', '/nixpacks', '/usr/local/bin/nixpacks'];
 
@@ -61,10 +61,11 @@ async function runDockerizedNixpacksBuild(
       ...baseCommandParts,
       `--entrypoint ${entrypoint}`,
       imageNameRef,
-      buildArgs,
+      nixpacksArgs,
     ].join(' ');
 
     try {
+      log(`   Trying Dockerized Nixpacks with entrypoint: ${entrypoint}`);
       await runNixpacksBuild(command, log);
       return;
     } catch (error: any) {
@@ -72,13 +73,22 @@ async function runDockerizedNixpacksBuild(
     }
   }
 
-  // Legacy invocation for images that already define ENTRYPOINT.
-  const legacyCommand = [...baseCommandParts, imageNameRef, buildArgs].join(' ');
-  try {
-    await runNixpacksBuild(legacyCommand, log);
-    return;
-  } catch (error: any) {
-    lastError = error;
+  // Some image variants expose nixpacks as command but no ENTRYPOINT.
+  const commandCandidates = [
+    `nixpacks ${nixpacksArgs}`,
+    `/usr/local/bin/nixpacks ${nixpacksArgs}`,
+    `/nixpacks ${nixpacksArgs}`,
+  ];
+
+  for (const commandCandidate of commandCandidates) {
+    const command = [...baseCommandParts, imageNameRef, commandCandidate].join(' ');
+    try {
+      log(`   Trying Dockerized Nixpacks command: ${commandCandidate.split(' ')[0]}`);
+      await runNixpacksBuild(command, log);
+      return;
+    } catch (error: any) {
+      lastError = error;
+    }
   }
 
   if (lastError?.killed) {
