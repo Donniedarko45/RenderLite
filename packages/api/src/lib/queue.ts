@@ -3,7 +3,7 @@ import { redis } from './redis.js';
 import { QUEUES } from '@renderlite/shared';
 
 export const buildQueue = new Queue(QUEUES.BUILD, {
-  connection: redis,
+  connection: redis as any,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -16,11 +16,11 @@ export const buildQueue = new Queue(QUEUES.BUILD, {
 });
 
 export const cleanupQueue = new Queue(QUEUES.CLEANUP, {
-  connection: redis,
+  connection: redis as any,
 });
 
 export const rollbackQueue = new Queue(QUEUES.ROLLBACK, {
-  connection: redis,
+  connection: redis as any,
   defaultJobOptions: {
     attempts: 2,
     backoff: {

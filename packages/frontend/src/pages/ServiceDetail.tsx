@@ -599,7 +599,7 @@ function DomainsTab({ serviceId }: { serviceId: string }) {
 
   const addMutation = useMutation({
     mutationFn: () => domainsApi.add(serviceId, newDomain),
-    onSuccess: (res) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['domains', serviceId] });
       setNewDomain('');
       toast.success('Domain added. Follow DNS instructions to verify.');

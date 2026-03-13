@@ -110,15 +110,6 @@ export function CommandMenu() {
     organizations: matchSearch('Organizations', q),
   }), [q]);
 
-  const hasAnyResults =
-    navMatches.dashboard ||
-    navMatches.projects ||
-    navMatches.organizations ||
-    filtered.projects.length > 0 ||
-    filtered.services.length > 0 ||
-    filtered.deployments.length > 0 ||
-    filtered.organizations.length > 0;
-
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {

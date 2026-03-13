@@ -154,7 +154,7 @@ const buildWorker = new Worker<DeploymentJobData, DeploymentJobResult>(
     );
   },
   {
-    connection: redis,
+    connection: redis as any,
     concurrency: 2,
     limiter: { max: 5, duration: 60000 },
   }
@@ -187,7 +187,7 @@ const rollbackWorker = new Worker<RollbackJobData, DeploymentJobResult>(
     );
   },
   {
-    connection: redis,
+    connection: redis as any,
     concurrency: 2,
   }
 );

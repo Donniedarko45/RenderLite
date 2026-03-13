@@ -30,11 +30,9 @@ export default function Organizations() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const { register, handleSubmit, reset, formState: { errors }, watch, setValue } = useForm<OrgFormData>({
+  const { register, handleSubmit, reset, formState: { errors }, setValue } = useForm<OrgFormData>({
     resolver: zodResolver(orgSchema),
   });
-
-  const nameValue = watch('name');
 
   const { data: orgs, isLoading } = useQuery({
     queryKey: ['organizations'],

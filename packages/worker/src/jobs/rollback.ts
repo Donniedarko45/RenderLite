@@ -58,7 +58,7 @@ export async function processRollback(
 
       const healthy = await waitForHealthCheck(
         containerId,
-        data.healthCheckPath,
+        data.healthCheckPath as string,
         DEFAULTS.CONTAINER_PORT,
         {
           timeout: data.healthCheckTimeout,
