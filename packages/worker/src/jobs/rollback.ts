@@ -21,10 +21,15 @@ export async function processRollback(
   };
 
   try {
-    await prisma.deployment.update({
+    const deploymentStarted = await prisma.deployment.updateMany({
       where: { id: data.deploymentId },
       data: { status: 'BUILDING', startedAt: new Date() },
     });
+
+    if (deploymentStarted.count === 0) {
+      appendLog('[WARN] Deployment record no longer exists. Skipping stale rollback job.');
+      return { success: false, error: 'Deployment record not found', logs };
+    }
 
     appendLog('==> Starting rollback...');
     appendLog(`   Image: ${data.imageTag}`);

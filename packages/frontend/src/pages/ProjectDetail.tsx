@@ -53,8 +53,26 @@ const serviceSchema = z.object({
 });
 
 type ServiceFormData = z.infer<typeof serviceSchema>;
+type GitHubRepositoryOption = {
+  id: number;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  private: boolean;
+  defaultBranch: string;
+  updatedAt: string;
+};
 
 const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+
+function toServiceSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+}
 
 const statusColors: Record<string, string> = {
   CREATED: 'bg-white/10 text-gray-300 border border-white/10',
@@ -74,13 +92,15 @@ export default function ProjectDetail() {
   const [showDbModal, setShowDbModal] = useState(false);
   const [dbName, setDbName] = useState('');
   const [dbType, setDbType] = useState('POSTGRES');
+  const [repoSearch, setRepoSearch] = useState('');
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ServiceFormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
       branch: 'main'
     }
   });
+  const watchedRepoUrl = watch('repoUrl');
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', projectId],
@@ -88,16 +108,33 @@ export default function ProjectDetail() {
     enabled: !!projectId,
   });
 
+  const { data: githubReposResponse, isLoading: isReposLoading, isFetching: isReposFetching, refetch: refetchRepos } = useQuery({
+    queryKey: ['github-repos', repoSearch],
+    queryFn: () => servicesApi.listGitHubRepos(repoSearch || undefined).then((res) => res.data),
+    enabled: showCreateModal,
+    staleTime: 60_000,
+  });
+  const githubRepos: GitHubRepositoryOption[] = githubReposResponse?.repositories || [];
+
   const createServiceMutation = useMutation({
     mutationFn: (data: any) => servicesApi.create({ ...data, projectId }),
-    onSuccess: () => {
+    onSuccess: async (response) => {
+      const createdService = response.data;
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setShowCreateModal(false);
-      reset();
-      toast.success('Service created successfully');
+      setRepoSearch('');
+      reset({ branch: 'main' });
+      toast.success('Service created. Starting initial deployment...');
+      try {
+        await deploymentsApi.trigger(createdService.id);
+        queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+        toast.success('Initial deployment started');
+      } catch (error: any) {
+        toast.error(error?.response?.data?.error || 'Service created, but failed to start initial deployment');
+      }
     },
-    onError: () => {
-      toast.error('Failed to create service');
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.error || 'Failed to create service');
     }
   });
 
@@ -147,6 +184,19 @@ export default function ProjectDetail() {
 
   const onSubmit = (data: ServiceFormData) => {
     createServiceMutation.mutate(data);
+  };
+
+  const handleRepositorySelect = (repo: GitHubRepositoryOption) => {
+    setValue('repoUrl', repo.htmlUrl, { shouldValidate: true, shouldDirty: true });
+    setValue('branch', repo.defaultBranch || 'main', { shouldValidate: true, shouldDirty: true });
+
+    const currentName = watch('name');
+    if (!currentName?.trim()) {
+      const suggestedName = toServiceSlug(repo.name);
+      if (suggestedName) {
+        setValue('name', suggestedName, { shouldValidate: true, shouldDirty: true });
+      }
+    }
   };
 
   if (isLoading) {
@@ -484,6 +534,59 @@ export default function ProjectDetail() {
                   />
                   {errors.name && <p className="text-red-400 text-sm mt-2 font-medium">{errors.name.message}</p>}
                 </div>
+                <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-gray-300">Import from GitHub</p>
+                    <button
+                      type="button"
+                      onClick={() => refetchRepos()}
+                      className="text-xs px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-all"
+                    >
+                      {isReposFetching ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={repoSearch}
+                    onChange={(e) => setRepoSearch(e.target.value)}
+                    placeholder="Search your repositories..."
+                    className="w-full px-3 py-2.5 bg-black border border-white/10 rounded-lg text-white placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/30 transition-all outline-none text-sm"
+                  />
+                  <div className="mt-3 max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {isReposLoading ? (
+                      <p className="text-xs text-gray-500 px-1 py-2">Loading repositories...</p>
+                    ) : githubRepos.length === 0 ? (
+                      <p className="text-xs text-gray-500 px-1 py-2">
+                        {githubReposResponse?.requiresReconnect
+                          ? 'No GitHub token found. Sign out and sign in with GitHub again to import repositories.'
+                          : 'No repositories found. You can still paste a repository URL manually below.'}
+                      </p>
+                    ) : (
+                      githubRepos.map((repo) => (
+                        <button
+                          key={repo.id}
+                          type="button"
+                          onClick={() => handleRepositorySelect(repo)}
+                          className={`w-full text-left rounded-lg px-3 py-2.5 border transition-all ${
+                            watchedRepoUrl === repo.htmlUrl
+                              ? 'border-white/40 bg-white/10'
+                              : 'border-white/10 bg-black hover:border-white/20 hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm text-white font-medium truncate">{repo.fullName}</span>
+                            {repo.private && (
+                              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 border border-white/20 rounded text-gray-300">
+                                Private
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Default branch: {repo.defaultBranch}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">
                     GitHub Repository URL
@@ -513,7 +616,8 @@ export default function ProjectDetail() {
                     type="button"
                     onClick={() => {
                       setShowCreateModal(false);
-                      reset();
+                      setRepoSearch('');
+                      reset({ branch: 'main' });
                     }}
                     className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors font-medium rounded-lg hover:bg-white/5"
                   >

@@ -71,7 +71,10 @@ export async function cleanupOldDeployments(keepCount: number = 10): Promise<num
     for (const service of services) {
       // Get deployments for this service, ordered by creation date
       const deployments = await prisma.deployment.findMany({
-        where: { serviceId: service.id },
+        where: {
+          serviceId: service.id,
+          status: { in: ['SUCCESS', 'FAILED'] },
+        },
         orderBy: { createdAt: 'desc' },
         select: { id: true },
       });
@@ -171,7 +174,7 @@ export async function cleanupStaleQueuedDeployments(staleMinutes: number = 15): 
         select: { id: true },
       });
 
-      await prisma.deployment.update({
+      const marked = await prisma.deployment.updateMany({
         where: { id: deployment.id },
         data: {
           status: 'FAILED',
@@ -179,6 +182,10 @@ export async function cleanupStaleQueuedDeployments(staleMinutes: number = 15): 
           finishedAt: new Date(),
         },
       });
+
+      if (marked.count === 0) {
+        continue;
+      }
 
       // Only change service status when this stale deployment is still the latest attempt.
       if (latestDeployment?.id === deployment.id) {
