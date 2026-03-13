@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+**/node_modules
+dist
+build
+coverage
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local
+tmp
+temp
+.vscode
+.idea
