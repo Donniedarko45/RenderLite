@@ -146,13 +146,15 @@ export default function Dashboard() {
                   <AnimatedCard key={stat.name} delay={i * 0.05}>
                     <Link
                       to="/projects"
-                      className={`dashboard-stat-card rounded-xl border p-5 flex flex-col transition-all hover:border-white/20 block ${stat.border}`}
+                      className={`dashboard-stat-card rounded-xl border p-5 flex flex-col transition-all hover:border-white/20 block min-w-0 ${stat.border}`}
                     >
                       <div className="flex items-center gap-3 mb-3">
                         <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color}`}>
                           <stat.icon className="w-5 h-5" />
                         </div>
-                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider leading-tight">{stat.name}</p>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider leading-tight truncate">
+                          {stat.name}
+                        </p>
                       </div>
                       <p className="text-2xl font-bold text-white tabular-nums">{stat.value}</p>
                     </Link>
@@ -248,9 +250,11 @@ export default function Dashboard() {
                     <Link
                       key={deployment.id}
                       to={`/deployments/${deployment.id}`}
-                      className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.03] transition-colors group"
+                      className="flex items-start sm:items-center gap-3 sm:gap-4 px-5 py-4 hover:bg-white/[0.03] transition-colors group"
                     >
-                      {getStatusIcon(deployment.status)}
+                      <div className="mt-0.5 sm:mt-0">
+                        {getStatusIcon(deployment.status)}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-200 group-hover:text-white truncate">
                           {deployment.service?.name}
@@ -259,9 +263,9 @@ export default function Dashboard() {
                           {deployment.commitSha?.substring(0, 7) || '—'}
                         </p>
                       </div>
-                      <div className="text-right shrink-0">
+                      <div className="text-left sm:text-right self-start sm:self-auto shrink-0">
                         <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{deployment.status}</p>
-                        <p className="text-xs text-gray-500 font-mono mt-0.5">
+                        <p className="text-xs text-gray-500 font-mono mt-0.5 whitespace-nowrap">
                           {new Date(deployment.createdAt).toLocaleDateString()}
                         </p>
                       </div>

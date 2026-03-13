@@ -31,7 +31,7 @@ export const DOCKER_LABELS = {
 export const DEFAULTS = {
   BRANCH: 'main',
   CONTAINER_PORT: 3000,
-  BUILD_TIMEOUT_MS: 5 * 60 * 1000, // 5 minutes
+  BUILD_TIMEOUT_MS: 20 * 60 * 1000, // 20 minutes
   CLONE_TIMEOUT_MS: 60 * 1000, // 1 minute
   MAX_REPO_SIZE_MB: 500,
   HEALTH_CHECK_INTERVAL: 30,

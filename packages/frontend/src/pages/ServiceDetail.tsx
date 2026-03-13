@@ -370,7 +370,7 @@ export default function ServiceDetail() {
             ) : (
               <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
                 {service.deployments?.map((deployment: any) => (
-                  <div key={deployment.id} className="flex items-center justify-between p-4 bg-black border border-white/5 hover:border-white/20 rounded-xl transition-all duration-300 group hover:bg-white/[0.02]">
+                  <div key={deployment.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-black border border-white/5 hover:border-white/20 rounded-xl transition-all duration-300 group hover:bg-white/[0.02]">
                     <Link to={`/deployments/${deployment.id}`} className="flex items-center flex-1 min-w-0">
                       {deployment.status === 'SUCCESS' && (
                         <CheckCircle className="w-5 h-5 text-[#00ff00] mr-4 flex-shrink-0" />
@@ -391,7 +391,7 @@ export default function ServiceDetail() {
                         <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider font-semibold">{deployment.status}</p>
                       </div>
                     </Link>
-                    <div className="flex items-center space-x-3 ml-4 flex-shrink-0">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 sm:ml-4 w-full sm:w-auto flex-shrink-0">
                       {deployment.status === 'SUCCESS' && deployment.imageTag && (
                         <button
                           onClick={(e) => {
@@ -409,7 +409,10 @@ export default function ServiceDetail() {
                         </button>
                       )}
                       <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors whitespace-nowrap">
-                        {new Date(deployment.createdAt).toLocaleString()}
+                        {new Date(deployment.createdAt).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })}
                       </p>
                     </div>
                   </div>

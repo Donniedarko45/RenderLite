@@ -6,12 +6,24 @@ import { DEFAULTS } from '@renderlite/shared';
 
 const execAsync = promisify(exec);
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const BUILD_TIMEOUT_MS = (() => {
+  const raw = process.env.BUILD_TIMEOUT_MS;
+  if (!raw) {
+    return DEFAULTS.BUILD_TIMEOUT_MS;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 60_000) {
+    return DEFAULTS.BUILD_TIMEOUT_MS;
+  }
+  return parsed;
+})();
+const BUILD_TIMEOUT_MINUTES = Math.round(BUILD_TIMEOUT_MS / 60_000);
 
 type LogCallback = (log: string) => void;
 
 async function runNixpacksBuild(command: string, log: LogCallback): Promise<void> {
   const { stdout, stderr } = await execAsync(command, {
-    timeout: DEFAULTS.BUILD_TIMEOUT_MS,
+    timeout: BUILD_TIMEOUT_MS,
     maxBuffer: 50 * 1024 * 1024,
     env: { ...process.env, DOCKER_BUILDKIT: '1' },
   });
@@ -92,7 +104,7 @@ async function runDockerizedNixpacksBuild(
   }
 
   if (lastError?.killed) {
-    throw new Error('Build timed out');
+    throw new Error(`Build timed out after ${BUILD_TIMEOUT_MINUTES} minutes`);
   }
 
   throw new Error(
@@ -123,7 +135,7 @@ export async function buildWithNixpacks(
     await runNixpacksBuild(localCommand, log);
   } catch (error: any) {
     if (error.killed) {
-      throw new Error('Build timed out');
+      throw new Error(`Build timed out after ${BUILD_TIMEOUT_MINUTES} minutes`);
     }
 
     if (!isLocalNixpacksMissing(error)) {
@@ -168,8 +180,8 @@ export async function buildWithDockerfile(
         if (typeof (stream as any).destroy === 'function') {
           (stream as any).destroy();
         }
-        reject(new Error('Build timed out'));
-      }, DEFAULTS.BUILD_TIMEOUT_MS);
+        reject(new Error(`Build timed out after ${BUILD_TIMEOUT_MINUTES} minutes`));
+      }, BUILD_TIMEOUT_MS);
 
       docker.modem.followProgress(
         stream,

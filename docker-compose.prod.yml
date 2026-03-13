@@ -119,6 +119,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
       BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
+      BUILD_TIMEOUT_MS: ${BUILD_TIMEOUT_MS:-1200000}
       ENABLE_TLS: "true"
     depends_on:
       postgres:
