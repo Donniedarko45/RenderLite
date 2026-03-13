@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH_ENABLED === 'true';
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 export default function Login() {
   const { isAuthenticated, login } = useAuth();
@@ -18,7 +19,8 @@ export default function Login() {
   }
 
   const handleLogin = () => {
-    window.location.href = '/auth/github';
+    const authUrl = API_URL ? `${API_URL}/auth/github` : '/auth/github';
+    window.location.href = authUrl;
   };
 
   const handleDevLogin = async () => {
