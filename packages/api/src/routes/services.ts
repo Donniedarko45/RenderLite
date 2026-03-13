@@ -83,7 +83,7 @@ serviceRouter.get('/', async (req: AuthRequest, res, next) => {
     });
 
     res.json(
-      services.map((service) => ({
+      services.map((service: any) => ({
         ...service,
         envVars: maskEnvVars(service.envVars),
       }))

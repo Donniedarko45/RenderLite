@@ -25,7 +25,7 @@ organizationRouter.get('/', async (req: AuthRequest, res, next) => {
     });
 
     res.json(
-      memberships.map((m) => ({
+      memberships.map((m: any) => ({
         ...m.organization,
         role: m.role,
       }))

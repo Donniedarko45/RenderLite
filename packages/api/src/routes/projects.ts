@@ -35,7 +35,7 @@ projectRouter.get('/', async (req: AuthRequest, res, next) => {
       where: { userId: req.user!.id },
       select: { organizationId: true },
     });
-    const orgIds = memberships.map((m) => m.organizationId);
+    const orgIds = memberships.map((m: any) => m.organizationId);
 
     const projects = await prisma.project.findMany({
       where: {
