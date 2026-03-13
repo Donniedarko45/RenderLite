@@ -8,7 +8,7 @@ import { Skeleton } from '../components/Skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/Tabs';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Building2, Users, FolderKanban, Plus, ChevronRight, Trash2, Shield, UserPlus,
+  Building2, Users, FolderKanban, ChevronRight, Trash2, UserPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {

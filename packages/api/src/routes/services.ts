@@ -185,7 +185,7 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
         branch: branch || 'main',
         runtime: runtime || null,
         subdomain,
-        envVars: encryptedEnvVars,
+        envVars: encryptedEnvVars as any,
         webhookSecret,
         healthCheckPath: healthCheckPath || null,
         healthCheckInterval: healthCheckInterval ?? 30,
