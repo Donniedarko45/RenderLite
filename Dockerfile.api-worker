@@ -33,8 +33,20 @@ CMD ["node", "packages/api/dist/index.js"]
 
 FROM runtime-base AS worker
 
+# Nixpacks CLI — Railway's ghcr.io/railwayapp/nixpacks:latest is a Nix *base* image only (no nixpacks binary).
+# Install the official release tarball so builds work without relying on a broken dockerized fallback.
+ARG NIXPACKS_RELEASE=v1.38.0
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends docker.io git ca-certificates \
+  && apt-get install -y --no-install-recommends docker.io git ca-certificates curl \
+  && ARCH="$(uname -m)" \
+  && case "$ARCH" in \
+       x86_64) NIXARCH=x86_64-unknown-linux-gnu ;; \
+       aarch64) NIXARCH=aarch64-unknown-linux-gnu ;; \
+       *) echo "Unsupported arch for nixpacks: $ARCH" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSL "https://github.com/railwayapp/nixpacks/releases/download/${NIXPACKS_RELEASE}/nixpacks-${NIXPACKS_RELEASE}-${NIXARCH}.tar.gz" \
+     | tar xz -C /usr/local/bin nixpacks \
+  && chmod +x /usr/local/bin/nixpacks \
   && rm -rf /var/lib/apt/lists/*
 
 CMD ["node", "packages/worker/dist/index.js"]

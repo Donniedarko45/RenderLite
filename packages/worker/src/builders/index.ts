@@ -19,7 +19,19 @@ const BUILD_TIMEOUT_MS = (() => {
 })();
 const BUILD_TIMEOUT_MINUTES = Math.round(BUILD_TIMEOUT_MS / 60_000);
 
+/** Release tag from https://github.com/railwayapp/nixpacks/releases — must match Dockerfile ARG when bumping. */
+const NIXPACKS_RELEASE = process.env.NIXPACKS_RELEASE ?? 'v1.38.0';
+
+/** Nix / OS base image (has curl); NOT the deprecated assumption that this image includes the nixpacks binary. */
+const NIXPACKS_DOCKER_BASE_IMAGE =
+  process.env.NIXPACKS_DOCKER_BASE_IMAGE ?? 'ghcr.io/railwayapp/nixpacks:ubuntu';
+
 type LogCallback = (log: string) => void;
+
+/** Single-quote a string for safe embedding in bash (POSIX: end quote, \\', resume quote). */
+function bashSingleQuote(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
 
 async function runNixpacksBuild(command: string, log: LogCallback): Promise<void> {
   const { stdout, stderr } = await execAsync(command, {
@@ -55,61 +67,41 @@ async function runDockerizedNixpacksBuild(
   imageName: string,
   log: LogCallback
 ): Promise<void> {
-  const baseCommandParts = [
+  const cacheKey = imageName.split(':')[0];
+  /**
+   * ghcr.io/railwayapp/nixpacks:latest / :ubuntu are Nix *base* images (Ubuntu + Nix). They do not ship the
+   * `nixpacks` CLI at /nixpacks. Download the official release binary inside the container, then run build.
+   */
+  const innerScript = [
+    'set -euo pipefail',
+    `NIXVER=${bashSingleQuote(NIXPACKS_RELEASE)}`,
+    'ARCH=$(uname -m)',
+    'case "$ARCH" in',
+    '  x86_64) NIXARCH=x86_64-unknown-linux-gnu ;;',
+    '  aarch64|arm64) NIXARCH=aarch64-unknown-linux-gnu ;;',
+    '  *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;',
+    'esac',
+    'URL="https://github.com/railwayapp/nixpacks/releases/download/${NIXVER}/nixpacks-${NIXVER}-${NIXARCH}.tar.gz"',
+    'curl -fsSL "$URL" | tar xz -C /usr/local/bin nixpacks',
+    'chmod +x /usr/local/bin/nixpacks',
+    `exec nixpacks build /app --name ${bashSingleQuote(imageName)} --cache-key ${bashSingleQuote(cacheKey)}`,
+  ].join('\n');
+
+  const b64 = Buffer.from(innerScript, 'utf8').toString('base64');
+  const command = [
     'docker run --rm',
     '-v /var/run/docker.sock:/var/run/docker.sock',
     `-v "${sourceDir}:/app"`,
     `-v "${cacheDir}:/cache"`,
     '-w /app',
-  ];
-  const nixpacksArgs = `build /app --name "${imageName}" --cache-key "${imageName.split(':')[0]}"`;
-  const imageNameRef = 'ghcr.io/railwayapp/nixpacks:latest';
-  const entrypointCandidates = ['nixpacks', '/nixpacks', '/usr/local/bin/nixpacks'];
+    NIXPACKS_DOCKER_BASE_IMAGE,
+    `bash -lc "echo ${b64} | base64 -d | bash"`,
+  ].join(' ');
 
-  let lastError: any;
-
-  for (const entrypoint of entrypointCandidates) {
-    const command = [
-      ...baseCommandParts,
-      `--entrypoint ${entrypoint}`,
-      imageNameRef,
-      nixpacksArgs,
-    ].join(' ');
-
-    try {
-      log(`   Trying Dockerized Nixpacks with entrypoint: ${entrypoint}`);
-      await runNixpacksBuild(command, log);
-      return;
-    } catch (error: any) {
-      lastError = error;
-    }
-  }
-
-  // Some image variants expose nixpacks as command but no ENTRYPOINT.
-  const commandCandidates = [
-    `nixpacks ${nixpacksArgs}`,
-    `/usr/local/bin/nixpacks ${nixpacksArgs}`,
-    `/nixpacks ${nixpacksArgs}`,
-  ];
-
-  for (const commandCandidate of commandCandidates) {
-    const command = [...baseCommandParts, imageNameRef, commandCandidate].join(' ');
-    try {
-      log(`   Trying Dockerized Nixpacks command: ${commandCandidate.split(' ')[0]}`);
-      await runNixpacksBuild(command, log);
-      return;
-    } catch (error: any) {
-      lastError = error;
-    }
-  }
-
-  if (lastError?.killed) {
-    throw new Error(`Build timed out after ${BUILD_TIMEOUT_MINUTES} minutes`);
-  }
-
-  throw new Error(
-    `Nixpacks build failed with Dockerized fallback: ${lastError?.message || 'Unknown error'}`
+  log(
+    `   Dockerized Nixpacks: using base image ${NIXPACKS_DOCKER_BASE_IMAGE}, release ${NIXPACKS_RELEASE} (download CLI in-container)`
   );
+  await runNixpacksBuild(command, log);
 }
 
 /**

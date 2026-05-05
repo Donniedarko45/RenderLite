@@ -50,3 +50,11 @@ packages/frontend/.vite/
 SushmitaKeyPair.pem
 SushmitaKeyPair.pem.Zone.Identifier
 SushmitaKeyPair.pem:Zone.Identifier
+
+# SSH / private keys (never commit)
+*.pem
+*.key
+*.pem.Zone.Identifier
+*.pem:Zone.Identifier
+id_rsa
+id_ed25519
