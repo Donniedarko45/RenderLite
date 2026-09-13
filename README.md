@@ -114,6 +114,7 @@ npm run dev:stack
 - API: http://localhost:3001
 - Traefik Dashboard: http://localhost:8080
 
+<![project-architecture](./project.png) > 
 ## Local Bring-up Checklist
 
 Use this exact order for a fresh clone:
