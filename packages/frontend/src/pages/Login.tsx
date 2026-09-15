@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Github, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH_ENABLED === 'true';
+const VITE_DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH_ENABLED === 'true';
+const VITE_SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true';
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 export default function Login() {
@@ -13,17 +14,19 @@ export default function Login() {
   const navigate = useNavigate();
   const [devLoginError, setDevLoginError] = useState('');
   const [isDevLoginLoading, setIsDevLoginLoading] = useState(false);
+  const [serverConfig, setServerConfig] = useState<{
+    gitHubOAuthConfigured?: boolean;
+    devAuthEnabled?: boolean;
+    skipAuth?: boolean;
+  }>({});
 
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
+  const devAuthActive =
+    VITE_DEV_AUTH_ENABLED ||
+    VITE_SKIP_AUTH ||
+    serverConfig.devAuthEnabled ||
+    serverConfig.skipAuth;
 
-  const handleLogin = () => {
-    const authUrl = API_URL ? `${API_URL}/auth/github` : '/auth/github';
-    window.location.href = authUrl;
-  };
-
-  const handleDevLogin = async () => {
+  const handleDevLogin = useCallback(async () => {
     try {
       setDevLoginError('');
       setIsDevLoginLoading(true);
@@ -35,6 +38,34 @@ export default function Login() {
     } finally {
       setIsDevLoginLoading(false);
     }
+  }, [login, navigate]);
+
+  useEffect(() => {
+    api
+      .get('/auth/config')
+      .then((res) => {
+        setServerConfig(res.data);
+        if (
+          (res.data?.skipAuth || VITE_SKIP_AUTH) &&
+          !sessionStorage.getItem('renderlite_logged_out')
+        ) {
+          handleDevLogin();
+        }
+      })
+      .catch(() => {
+        if (VITE_SKIP_AUTH && !sessionStorage.getItem('renderlite_logged_out')) {
+          handleDevLogin();
+        }
+      });
+  }, [handleDevLogin]);
+
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  const handleLogin = () => {
+    const authUrl = API_URL ? `${API_URL}/auth/github` : '/auth/github';
+    window.location.href = authUrl;
   };
 
   return (
@@ -66,6 +97,19 @@ export default function Login() {
         </div>
 
         <div className="space-y-4">
+          {devAuthActive && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleDevLogin}
+              disabled={isDevLoginLoading}
+              className="w-full flex items-center justify-center px-4 py-3.5 bg-white text-black rounded-xl hover:bg-gray-200 transition-colors font-medium shadow-md disabled:opacity-50"
+            >
+              <User className="w-5 h-5 mr-3" />
+              {isDevLoginLoading ? 'Signing in...' : 'Sign In with Dummy Account (Local Dev)'}
+            </motion.button>
+          )}
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -75,18 +119,11 @@ export default function Login() {
             <Github className="w-5 h-5 mr-3" />
             Continue with GitHub
           </motion.button>
-          
-          {DEV_AUTH_ENABLED && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleDevLogin}
-              disabled={isDevLoginLoading}
-              className="w-full flex items-center justify-center px-4 py-3.5 bg-white text-black rounded-xl hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
-            >
-              <User className="w-5 h-5 mr-3" />
-              {isDevLoginLoading ? 'Signing in...' : 'Continue as Demo User'}
-            </motion.button>
+
+          {devAuthActive && serverConfig.gitHubOAuthConfigured === false && (
+            <p className="text-xs text-amber-400/80 text-center font-mono">
+              Running locally: GitHub OAuth is disabled. Use the dummy account to proceed.
+            </p>
           )}
           
           <AnimatePresence>

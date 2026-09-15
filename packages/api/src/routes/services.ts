@@ -6,10 +6,50 @@ import { AppError } from '../middleware/errorHandler.js';
 import { generateSubdomain } from '../utils/subdomain.js';
 import { decrypt, encryptEnvVars } from '../utils/encryption.js';
 import Docker from 'dockerode';
+import { isDevAuthEnabled } from './auth.js';
 
 export const serviceRouter = Router();
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const GITHUB_API_BASE_URL = 'https://api.github.com';
+
+const DUMMY_REPOSITORIES: GitHubRepository[] = [
+  {
+    id: 90001,
+    name: 'express-hello-world',
+    full_name: 'demo-user/express-hello-world',
+    html_url: 'https://github.com/expressjs/express',
+    private: false,
+    default_branch: 'master',
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 90002,
+    name: 'fastapi-service',
+    full_name: 'demo-user/fastapi-service',
+    html_url: 'https://github.com/tiangolo/fastapi',
+    private: false,
+    default_branch: 'master',
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 90003,
+    name: 'react-frontend-demo',
+    full_name: 'demo-user/react-frontend-demo',
+    html_url: 'https://github.com/facebook/react',
+    private: false,
+    default_branch: 'main',
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 90004,
+    name: 'nestjs-starter',
+    full_name: 'demo-user/nestjs-starter',
+    html_url: 'https://github.com/nestjs/nest',
+    private: false,
+    default_branch: 'master',
+    updated_at: new Date().toISOString(),
+  },
+];
 
 type GitHubRepository = {
   id: number;
@@ -124,11 +164,33 @@ function parseGitHubRepoUrl(rawRepoUrl: string): {
   try {
     url = new URL(rawRepoUrl.trim());
   } catch {
+    if (isDevAuthEnabled() && rawRepoUrl.includes('/')) {
+      const parts = rawRepoUrl.trim().replace(/^\/+|\/+$/g, '').split('/');
+      if (parts.length >= 2) {
+        const owner = parts[parts.length - 2];
+        const repo = parts[parts.length - 1].replace(/\.git$/i, '');
+        return {
+          owner,
+          repo,
+          normalizedUrl: `https://github.com/${owner}/${repo}`,
+        };
+      }
+    }
     throw new AppError('Invalid GitHub repository URL', 400);
   }
 
   const host = url.hostname.toLowerCase();
   if (host !== 'github.com' && host !== 'www.github.com') {
+    if (isDevAuthEnabled()) {
+      const parts = url.pathname.replace(/\/+$/, '').replace(/\.git$/i, '').split('/').filter(Boolean);
+      const owner = parts[parts.length - 2] || 'dev';
+      const repo = parts[parts.length - 1] || 'repo';
+      return {
+        owner,
+        repo,
+        normalizedUrl: url.toString().replace(/\/+$/, ''),
+      };
+    }
     throw new AppError('Repository must be hosted on github.com', 400);
   }
 
@@ -262,6 +324,33 @@ serviceRouter.get('/github/repos', async (req: AuthRequest, res, next) => {
 
     const githubToken = await getGitHubAccessToken(req.user!.id);
     if (!githubToken) {
+      if (isDevAuthEnabled()) {
+        const dummyFiltered = DUMMY_REPOSITORIES
+          .filter((repo) => {
+            if (!q) return true;
+            return (
+              repo.name.toLowerCase().includes(q) || repo.full_name.toLowerCase().includes(q)
+            );
+          })
+          .map((repo) => ({
+            id: repo.id,
+            name: repo.name,
+            fullName: repo.full_name,
+            htmlUrl: repo.html_url.replace(/\/+$/, ''),
+            private: repo.private,
+            defaultBranch: repo.default_branch || 'main',
+            updatedAt: repo.updated_at,
+          }));
+
+        return res.json({
+          repositories: dummyFiltered,
+          page: 1,
+          perPage,
+          hasMore: false,
+          requiresReconnect: false,
+        });
+      }
+
       return res.json({
         repositories: [],
         page,
@@ -277,6 +366,33 @@ serviceRouter.get('/github/repos', async (req: AuthRequest, res, next) => {
     );
 
     if (response.status === 401 || response.status === 403) {
+      if (isDevAuthEnabled()) {
+        const dummyFiltered = DUMMY_REPOSITORIES
+          .filter((repo) => {
+            if (!q) return true;
+            return (
+              repo.name.toLowerCase().includes(q) || repo.full_name.toLowerCase().includes(q)
+            );
+          })
+          .map((repo) => ({
+            id: repo.id,
+            name: repo.name,
+            fullName: repo.full_name,
+            htmlUrl: repo.html_url.replace(/\/+$/, ''),
+            private: repo.private,
+            defaultBranch: repo.default_branch || 'main',
+            updatedAt: repo.updated_at,
+          }));
+
+        return res.json({
+          repositories: dummyFiltered,
+          page: 1,
+          perPage,
+          hasMore: false,
+          requiresReconnect: false,
+        });
+      }
+
       return res.json({
         repositories: [],
         page,
@@ -394,11 +510,37 @@ serviceRouter.post('/', async (req: AuthRequest, res, next) => {
 
     const { owner, repo } = parseGitHubRepoUrl(repoUrl);
     const githubToken = await getGitHubAccessToken(req.user!.id);
-    const verifiedRepo = await verifyGitHubRepository(owner, repo, githubToken);
+    let verifiedRepo: GitHubRepository;
+    try {
+      verifiedRepo = await verifyGitHubRepository(owner, repo, githubToken);
+    } catch (error) {
+      if (isDevAuthEnabled()) {
+        console.warn(`[Dev Auth] GitHub repo verification bypassed: ${owner}/${repo}`);
+        verifiedRepo = {
+          id: Math.floor(Math.random() * 1000000),
+          name: repo,
+          full_name: `${owner}/${repo}`,
+          html_url: `https://github.com/${owner}/${repo}`,
+          default_branch: 'main',
+          private: false,
+          updated_at: new Date().toISOString(),
+        };
+      } else {
+        throw error;
+      }
+    }
 
     const selectedBranch = typeof branch === 'string' ? branch.trim() : '';
     if (selectedBranch) {
-      await verifyGitHubBranchExists(owner, repo, selectedBranch, githubToken);
+      try {
+        await verifyGitHubBranchExists(owner, repo, selectedBranch, githubToken);
+      } catch (error) {
+        if (isDevAuthEnabled()) {
+          console.warn(`[Dev Auth] GitHub branch verification bypassed for branch: ${selectedBranch}`);
+        } else {
+          throw error;
+        }
+      }
     }
     const finalBranch = selectedBranch || verifiedRepo.default_branch || 'main';
 

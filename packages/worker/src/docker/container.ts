@@ -25,14 +25,23 @@ export async function runContainer(options: RunContainerOptions): Promise<string
     imageName,
     subdomain,
     envVars = {},
-    port = DEFAULTS.CONTAINER_PORT,
+    port: explicitPort,
     customDomains = [],
     containerNameOverride,
   } = options;
 
+  const port =
+    explicitPort ??
+    (envVars.PORT && !Number.isNaN(Number(envVars.PORT))
+      ? Number(envVars.PORT)
+      : DEFAULTS.CONTAINER_PORT);
+
   const containerName = containerNameOverride || `renderlite-${subdomain}`;
-  const baseDomain = process.env.BASE_DOMAIN || 'renderlite.local';
-  const hostRule = `Host(\`${subdomain}.${baseDomain}\`)`;
+  const baseDomain = process.env.BASE_DOMAIN || 'localhost';
+  const hostRule =
+    baseDomain === 'localhost'
+      ? `Host(\`${subdomain}.localhost\`)`
+      : `Host(\`${subdomain}.${baseDomain}\`) || Host(\`${subdomain}.localhost\`)`;
   const tlsEnabled = isTlsEnabled();
   const entrypoint = tlsEnabled ? 'websecure' : 'web';
 

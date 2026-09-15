@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'localhost';
 
 const statusColors: Record<string, string> = {
   QUEUED: 'bg-white/10 text-gray-300 border border-white/10',
@@ -65,7 +65,8 @@ export default function DeploymentDetail() {
     queryKey: ['deployment-logs', deploymentId],
     queryFn: () => deploymentsApi.getLogs(deploymentId!).then((res) => res.data),
     enabled: !!deploymentId,
-    refetchInterval: currentStatus === 'BUILDING' ? 2000 : false,
+    refetchInterval:
+      currentStatus === 'BUILDING' || currentStatus === 'QUEUED' || !currentStatus ? 1500 : false,
   });
 
   // Subscribe to real-time logs
@@ -81,12 +82,13 @@ export default function DeploymentDetail() {
         setCurrentStatus(data.status);
         if (data.status === 'SUCCESS' || data.status === 'FAILED') {
           refetch();
+          queryClient.invalidateQueries({ queryKey: ['deployment-logs', deploymentId] });
         }
       }
     );
 
     return unsubscribe;
-  }, [deploymentId, refetch]);
+  }, [deploymentId, refetch, queryClient]);
 
   // Update status from deployment data
   useEffect(() => {

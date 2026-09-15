@@ -127,9 +127,10 @@ export async function processRollback(
       }
     }
 
+    const baseDomain = process.env.BASE_DOMAIN || 'localhost';
     const protocol = process.env.ENABLE_TLS === 'true' ? 'https' : 'http';
     appendLog(`\n==> Rollback complete`);
-    appendLog(`   Service at: ${protocol}://${data.subdomain}.${process.env.BASE_DOMAIN || 'renderlite.local'}`);
+    appendLog(`   Service at: ${protocol}://${data.subdomain}.${baseDomain}`);
 
     return {
       success: true,

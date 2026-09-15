@@ -90,6 +90,7 @@ services:
       BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
       ENABLE_TLS: "true"
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      SKIP_AUTH: ${SKIP_AUTH:-false}
       DEV_AUTH_EMAIL: ${DEV_AUTH_EMAIL:-dev@renderlite.local}
       DEV_AUTH_USERNAME: ${DEV_AUTH_USERNAME:-dev-user}
     depends_on:
@@ -141,6 +142,7 @@ services:
         VITE_SOCKET_URL: https://${API_HOST:?API_HOST is required}
         VITE_BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
         VITE_DEV_AUTH_ENABLED: ${VITE_DEV_AUTH_ENABLED:-false}
+        VITE_SKIP_AUTH: ${VITE_SKIP_AUTH:-false}
     container_name: renderlite-frontend
     depends_on:
       api:

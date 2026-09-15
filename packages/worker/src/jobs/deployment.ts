@@ -77,10 +77,10 @@ export async function processDeployment(
 
     if (hasDockerfile) {
       appendLog('   Dockerfile detected, using Docker build');
-      await buildWithDockerfile(workDir, imageTag, appendLog);
+      await buildWithDockerfile(workDir, imageTag, appendLog, data.envVars);
     } else {
       appendLog('   No Dockerfile found, using Nixpacks');
-      await buildWithNixpacks(workDir, imageTag, appendLog);
+      await buildWithNixpacks(workDir, imageTag, appendLog, data.envVars);
     }
 
     appendLog('    Done: Image built successfully');
@@ -221,8 +221,9 @@ export async function processDeployment(
       }
     }
 
+    const baseDomain = process.env.BASE_DOMAIN || 'localhost';
     const protocol = process.env.ENABLE_TLS === 'true' ? 'https' : 'http';
-    appendLog(`\n==> Service available at: ${protocol}://${data.subdomain}.${process.env.BASE_DOMAIN || 'renderlite.local'}`);
+    appendLog(`\n==> Service available at: ${protocol}://${data.subdomain}.${baseDomain}`);
 
     await fs.rm(workDir, { recursive: true, force: true });
 

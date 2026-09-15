@@ -20,8 +20,20 @@ import { organizationRouter } from './routes/organizations.js';
 import { databaseRouter } from './routes/databases.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import fs from 'fs';
+import path from 'path';
 
-dotenv.config();
+const rootEnvCandidates = [
+  path.resolve(process.cwd(), '../../.env'),
+  path.resolve(process.cwd(), '.env'),
+];
+for (const envPath of rootEnvCandidates) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: true });
+    break;
+  }
+}
+dotenv.config({ override: true });
 
 const app = express();
 const httpServer = createServer(app);

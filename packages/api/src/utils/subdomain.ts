@@ -39,7 +39,7 @@ export async function generateSubdomain(serviceName: string): Promise<string> {
  * Get full URL for a service, respecting TLS configuration
  */
 export function getServiceUrl(subdomain: string): string {
-  const baseDomain = process.env.BASE_DOMAIN || 'renderlite.local';
+  const baseDomain = process.env.BASE_DOMAIN || 'localhost';
   const protocol = process.env.ENABLE_TLS === 'true' ? 'https' : 'http';
   return `${protocol}://${subdomain}.${baseDomain}`;
 }

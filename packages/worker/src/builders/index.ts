@@ -1,10 +1,10 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
+import readline from 'readline';
 import Docker from 'dockerode';
 import fs from 'fs/promises';
+import path from 'path';
 import { DEFAULTS } from '@renderlite/shared';
 
-const execAsync = promisify(exec);
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const BUILD_TIMEOUT_MS = (() => {
   const raw = process.env.BUILD_TIMEOUT_MS;
@@ -33,23 +33,60 @@ function bashSingleQuote(s: string): string {
   return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
-async function runNixpacksBuild(command: string, log: LogCallback): Promise<void> {
-  const { stdout, stderr } = await execAsync(command, {
-    timeout: BUILD_TIMEOUT_MS,
-    maxBuffer: 50 * 1024 * 1024,
-    env: { ...process.env, DOCKER_BUILDKIT: '1' },
+function runNixpacksBuild(command: string, log: LogCallback): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('bash', ['-c', command], {
+      env: { ...process.env, DOCKER_BUILDKIT: '1' },
+    });
+
+    let timeoutTimer: NodeJS.Timeout | null = null;
+    if (BUILD_TIMEOUT_MS > 0) {
+      timeoutTimer = setTimeout(() => {
+        proc.kill('SIGTERM');
+        reject(new Error(`Build timed out after ${BUILD_TIMEOUT_MINUTES} minutes`));
+      }, BUILD_TIMEOUT_MS);
+    }
+
+    const errorChunks: string[] = [];
+
+    const rlOut = readline.createInterface({ input: proc.stdout });
+    rlOut.on('line', (line) => {
+      const trimmed = line.trimEnd();
+      if (trimmed) {
+        log(`   ${trimmed}`);
+      }
+    });
+
+    const rlErr = readline.createInterface({ input: proc.stderr });
+    rlErr.on('line', (line) => {
+      const trimmed = line.trimEnd();
+      if (trimmed) {
+        errorChunks.push(trimmed);
+        if (trimmed.toLowerCase().includes('error') || trimmed.toLowerCase().includes('failed')) {
+          log(`   [ERROR] ${trimmed}`);
+        } else {
+          log(`   ${trimmed}`);
+        }
+      }
+    });
+
+    proc.on('error', (err) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      reject(err);
+    });
+
+    proc.on('close', (code) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (code === 0) {
+        resolve();
+      } else {
+        const errDetails = errorChunks.slice(-5).join('\n') || `code ${code}`;
+        const err = new Error(`Nixpacks build failed with code ${code}: ${errDetails}`);
+        (err as any).stderr = errorChunks.join('\n');
+        reject(err);
+      }
+    });
   });
-
-  if (stdout) {
-    const lines = stdout
-      .split('\n')
-      .filter((line) => line.includes('==>') || line.includes('Step') || line.includes('Successfully'));
-    lines.forEach((line) => log(`   ${line}`));
-  }
-
-  if (stderr && !stderr.toLowerCase().includes('warning')) {
-    log(`   [WARN] ${stderr}`);
-  }
 }
 
 function isLocalNixpacksMissing(error: any): boolean {
@@ -61,19 +98,96 @@ function isLocalNixpacksMissing(error: any): boolean {
   );
 }
 
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Prepare environment variables for Nixpacks build.
+ * Ensures custom env vars are passed and automatically defaults Node.js version
+ * to 20 for Node/Next.js projects that don't specify engines.node or .nvmrc.
+ */
+async function resolveBuildEnvironment(
+  sourceDir: string,
+  envVars?: Record<string, string>,
+  log?: LogCallback
+): Promise<Record<string, string>> {
+  const effectiveEnvs: Record<string, string> = { ...(envVars || {}) };
+
+  // If user explicitly configured NIXPACKS_NODE_VERSION or NODE_VERSION, respect it
+  if (effectiveEnvs.NIXPACKS_NODE_VERSION || effectiveEnvs.NODE_VERSION) {
+    return effectiveEnvs;
+  }
+
+  // Check if .nvmrc or .node-version exists in repository
+  const hasNvmrc = await fileExists(path.join(sourceDir, '.nvmrc'));
+  const hasNodeVersion = await fileExists(path.join(sourceDir, '.node-version'));
+  if (hasNvmrc || hasNodeVersion) {
+    return effectiveEnvs;
+  }
+
+  // Check package.json in repository root
+  const pkgPath = path.join(sourceDir, 'package.json');
+  if (await fileExists(pkgPath)) {
+    try {
+      const raw = await fs.readFile(pkgPath, 'utf8');
+      const pkg = JSON.parse(raw);
+
+      // If engines.node is explicitly defined, let Nixpacks resolve it
+      if (pkg.engines?.node) {
+        return effectiveEnvs;
+      }
+
+      // Default to Node 20 for Node/Next.js projects (Next.js >= 14 requires >= 20.9.0)
+      effectiveEnvs.NIXPACKS_NODE_VERSION = '20';
+      const isNext = !!(pkg.dependencies?.next || pkg.devDependencies?.next);
+      if (log) {
+        if (isNext) {
+          log('   Info: Detected Next.js project; defaulting NIXPACKS_NODE_VERSION to 20');
+        } else {
+          log('   Info: Node.js project detected without engines.node; defaulting NIXPACKS_NODE_VERSION to 20');
+        }
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }
+
+  return effectiveEnvs;
+}
+
+function formatNixpacksEnvArgs(envs: Record<string, string>): string {
+  const args: string[] = [];
+  for (const [key, value] of Object.entries(envs)) {
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+      args.push(`--env ${bashSingleQuote(`${key}=${value}`)}`);
+    }
+  }
+  return args.length > 0 ? ` ${args.join(' ')}` : '';
+}
+
 async function runDockerizedNixpacksBuild(
   sourceDir: string,
   cacheDir: string,
   imageName: string,
-  log: LogCallback
+  log: LogCallback,
+  buildEnvs: Record<string, string> = {}
 ): Promise<void> {
   const cacheKey = imageName.split(':')[0];
+  const envFlags = formatNixpacksEnvArgs(buildEnvs);
+
   /**
    * ghcr.io/railwayapp/nixpacks:latest / :ubuntu are Nix *base* images (Ubuntu + Nix). They do not ship the
    * `nixpacks` CLI at /nixpacks. Download the official release binary inside the container, then run build.
    */
   const innerScript = [
     'set -euo pipefail',
+    'export PATH="/usr/local/bin:/usr/bin:/cache/bin:$PATH"',
     `NIXVER=${bashSingleQuote(NIXPACKS_RELEASE)}`,
     'ARCH=$(uname -m)',
     'case "$ARCH" in',
@@ -81,10 +195,15 @@ async function runDockerizedNixpacksBuild(
     '  aarch64|arm64) NIXARCH=aarch64-unknown-linux-gnu ;;',
     '  *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;',
     'esac',
-    'URL="https://github.com/railwayapp/nixpacks/releases/download/${NIXVER}/nixpacks-${NIXVER}-${NIXARCH}.tar.gz"',
-    'curl -fsSL "$URL" | tar xz -C /usr/local/bin nixpacks',
-    'chmod +x /usr/local/bin/nixpacks',
-    `exec nixpacks build /app --name ${bashSingleQuote(imageName)} --cache-key ${bashSingleQuote(cacheKey)}`,
+    'mkdir -p /cache/bin /usr/local/bin /usr/bin',
+    'if [ ! -x /cache/bin/nixpacks ]; then',
+    '  URL="https://github.com/railwayapp/nixpacks/releases/download/${NIXVER}/nixpacks-${NIXVER}-${NIXARCH}.tar.gz"',
+    '  curl -fsSL "$URL" | tar xz -C /cache/bin nixpacks',
+    '  chmod +x /cache/bin/nixpacks',
+    'fi',
+    'cp -f /cache/bin/nixpacks /usr/bin/nixpacks 2>/dev/null || true',
+    'cp -f /cache/bin/nixpacks /usr/local/bin/nixpacks 2>/dev/null || true',
+    `exec /cache/bin/nixpacks build /app --name ${bashSingleQuote(imageName)} --cache-key ${bashSingleQuote(cacheKey)}${envFlags}`,
   ].join('\n');
 
   const b64 = Buffer.from(innerScript, 'utf8').toString('base64');
@@ -110,7 +229,8 @@ async function runDockerizedNixpacksBuild(
 export async function buildWithNixpacks(
   sourceDir: string,
   imageName: string,
-  log: LogCallback
+  log: LogCallback,
+  envVars?: Record<string, string>
 ): Promise<void> {
   log('Running Nixpacks build...');
 
@@ -121,7 +241,9 @@ export async function buildWithNixpacks(
     // ignore
   }
 
-  const localCommand = `nixpacks build "${sourceDir}" --name "${imageName}" --cache-key "${imageName.split(':')[0]}"`;
+  const effectiveEnvs = await resolveBuildEnvironment(sourceDir, envVars, log);
+  const envFlags = formatNixpacksEnvArgs(effectiveEnvs);
+  const localCommand = `nixpacks build "${sourceDir}" --name "${imageName}" --cache-key "${imageName.split(':')[0]}"${envFlags}`;
 
   try {
     await runNixpacksBuild(localCommand, log);
@@ -135,7 +257,7 @@ export async function buildWithNixpacks(
     }
 
     log('   [WARN] Local nixpacks not found, using Dockerized Nixpacks fallback');
-    await runDockerizedNixpacksBuild(sourceDir, cacheDir, imageName, log);
+    await runDockerizedNixpacksBuild(sourceDir, cacheDir, imageName, log, effectiveEnvs);
   }
 }
 
@@ -146,7 +268,8 @@ export async function buildWithNixpacks(
 export async function buildWithDockerfile(
   sourceDir: string,
   imageName: string,
-  log: LogCallback
+  log: LogCallback,
+  envVars?: Record<string, string>
 ): Promise<void> {
   log('Running Docker build with BuildKit caching...');
 
@@ -163,7 +286,7 @@ export async function buildWithDockerfile(
         {
           t: imageName,
           dockerfile: 'Dockerfile',
-          buildargs: { BUILDKIT_INLINE_CACHE: '1' },
+          buildargs: { BUILDKIT_INLINE_CACHE: '1', ...(envVars || {}) },
           cachefrom: JSON.stringify([cacheFromTag]),
         }
       );

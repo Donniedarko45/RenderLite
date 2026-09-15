@@ -63,7 +63,7 @@ type GitHubRepositoryOption = {
   updatedAt: string;
 };
 
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'localhost';
 
 function toServiceSlug(value: string): string {
   return value

@@ -44,7 +44,7 @@ import { toast } from 'sonner';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/Tabs';
 
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'renderlite.local';
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'localhost';
 
 const statusColors: Record<string, string> = {
   CREATED: 'bg-white/10 text-gray-300 border border-white/10',

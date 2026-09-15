@@ -77,9 +77,10 @@ Edit `.env` and add your GitHub OAuth credentials:
 - Set callback URL to `http://localhost:3001/auth/github/callback`
 - Copy Client ID and Client Secret to `.env`
 
-Optional for local-only auth bypass (disabled by default):
-- Set `DEV_AUTH_ENABLED="true"`
-- Set `VITE_DEV_AUTH_ENABLED="true"` in `packages/frontend/.env.local`
+Optional for local development / testing without GitHub OAuth:
+- Set `DEV_AUTH_ENABLED="true"` (enables dummy auth & sample repositories)
+- Set `SKIP_AUTH="true"` (automatically bypasses login screen with dummy user)
+- In `packages/frontend/.env.local`: set `VITE_DEV_AUTH_ENABLED="true"` and `VITE_SKIP_AUTH="true"`
 
 ### 3. Start Infrastructure
 
@@ -229,13 +230,15 @@ MiniPaas/
 | API_PORT | API server port | 3001 |
 | API_URL | API base URL | http://localhost:3001 |
 | FRONTEND_URL | Frontend URL for CORS | http://localhost:5173 |
-| VITE_DEV_AUTH_ENABLED | Show dev login button in frontend | false |
+| VITE_DEV_AUTH_ENABLED | Show dev dummy login button in frontend | false |
+| VITE_SKIP_AUTH | Automatically skip login screen in frontend | false |
 | VITE_BASE_DOMAIN | Frontend base domain for service links | renderlite.local |
 | ENCRYPTION_KEY | AES-256 key for env vars | - |
 | BASE_DOMAIN | Base domain for services | renderlite.local |
-| DEV_AUTH_ENABLED | Enable backend dev auth bypass endpoint | false |
-| DEV_AUTH_EMAIL | Local demo user email for dev auth | dev@renderlite.local |
-| DEV_AUTH_USERNAME | Local demo username for dev auth | dev-user |
+| DEV_AUTH_ENABLED | Enable backend dummy auth & bypass endpoints | false |
+| SKIP_AUTH | Auto-authenticate dummy user and skip GitHub OAuth | false |
+| DEV_AUTH_EMAIL | Local demo user email for dummy auth | dev@renderlite.local |
+| DEV_AUTH_USERNAME | Local demo username for dummy auth | dev-user |
 
 `VITE_*` variables should be defined in `packages/frontend/.env.local`.
 

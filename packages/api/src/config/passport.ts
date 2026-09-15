@@ -4,9 +4,18 @@ import { prisma } from '../lib/prisma.js';
 import { encrypt } from '../utils/encryption.js';
 
 export function isGitHubOAuthConfigured(): boolean {
-  return Boolean(
-    process.env.GITHUB_CLIENT_ID?.trim() && process.env.GITHUB_CLIENT_SECRET?.trim()
-  );
+  const clientId = process.env.GITHUB_CLIENT_ID?.trim();
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return false;
+  if (
+    clientId === 'your_github_client_id' ||
+    clientSecret === 'your_github_client_secret' ||
+    clientId.startsWith('your_') ||
+    clientSecret.startsWith('your_')
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function configurePassport() {

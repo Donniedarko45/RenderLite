@@ -5,10 +5,61 @@ import { prisma } from '../lib/prisma.js';
 import crypto from 'crypto';
 import { isGitHubOAuthConfigured } from '../config/passport.js';
 
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+
 export const authRouter = Router();
 
-function isDevAuthEnabled(): boolean {
-  return process.env.DEV_AUTH_ENABLED === 'true';
+function syncEnvFromRoot() {
+  try {
+    const candidates = [
+      path.resolve(process.cwd(), '../../.env'),
+      path.resolve(process.cwd(), '.env'),
+      path.resolve(process.cwd(), '../.env'),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        dotenv.config({ path: p, override: true });
+        break;
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function isDevAuthEnabled(): boolean {
+  syncEnvFromRoot();
+  if (process.env.DEV_AUTH_ENABLED === 'true' || process.env.SKIP_AUTH === 'true') {
+    return true;
+  }
+  // In local development, if GitHub OAuth is not configured, automatically enable dummy dev auth
+  if (process.env.NODE_ENV !== 'production' && !isGitHubOAuthConfigured()) {
+    return true;
+  }
+  return false;
+}
+
+export async function getOrCreateDevUser() {
+  const email = process.env.DEV_AUTH_EMAIL || 'dev@renderlite.local';
+  const username = process.env.DEV_AUTH_USERNAME || 'dev-user';
+  const githubId = `dev-${crypto
+    .createHash('sha256')
+    .update(email.toLowerCase())
+    .digest('hex')
+    .slice(0, 24)}`;
+
+  return await prisma.user.upsert({
+    where: { email },
+    update: { username, avatarUrl: null },
+    create: {
+      email,
+      username,
+      githubId,
+      avatarUrl: null,
+    },
+  });
 }
 
 function ensureGitHubOAuthConfigured(
@@ -25,12 +76,40 @@ function ensureGitHubOAuthConfigured(
   next();
 }
 
-// GitHub OAuth initiation
-authRouter.get(
-  '/github',
-  ensureGitHubOAuthConfigured,
-  passport.authenticate('github', { session: false })
-);
+// Auth config endpoint for frontend detection
+authRouter.get('/config', (req, res) => {
+  res.json({
+    gitHubOAuthConfigured: isGitHubOAuthConfigured(),
+    devAuthEnabled: isDevAuthEnabled(),
+    skipAuth: process.env.SKIP_AUTH === 'true',
+  });
+});
+
+// GitHub OAuth initiation (gracefully redirects with dummy token in dev mode if OAuth is not configured)
+authRouter.get('/github', async (req: Request, res: Response, next: NextFunction) => {
+  if (!isGitHubOAuthConfigured()) {
+    if (isDevAuthEnabled()) {
+      try {
+        const user = await getOrCreateDevUser();
+        const token = generateToken({
+          userId: user.id,
+          email: user.email,
+          username: user.username,
+        });
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+      } catch (error) {
+        return next(error);
+      }
+    }
+    return res.status(503).json({
+      error: 'GitHub OAuth is not configured on this server',
+      hint: 'Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET or use dev login',
+    });
+  }
+
+  passport.authenticate('github', { session: false })(req, res, next);
+});
 
 // GitHub OAuth callback
 authRouter.get(
@@ -59,25 +138,7 @@ authRouter.post('/dev-login', async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const email = process.env.DEV_AUTH_EMAIL || 'dev@renderlite.local';
-    const username = process.env.DEV_AUTH_USERNAME || 'dev-user';
-    const githubId = `dev-${crypto
-      .createHash('sha256')
-      .update(email.toLowerCase())
-      .digest('hex')
-      .slice(0, 24)}`;
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { username, avatarUrl: null },
-      create: {
-        email,
-        username,
-        githubId,
-        avatarUrl: null,
-      },
-    });
-
+    const user = await getOrCreateDevUser();
     const token = generateToken({
       userId: user.id,
       email: user.email,

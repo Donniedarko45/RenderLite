@@ -7,6 +7,7 @@ import type { DeploymentJobData, RollbackJobData } from '@renderlite/shared';
 import { DeploymentStatus, ServiceStatus } from '@renderlite/shared';
 import { decryptEnvVars, decrypt } from '../utils/encryption.js';
 import type { SocketHandlers } from '../socket/index.js';
+import { redis } from '../lib/redis.js';
 
 export const deploymentRouter = Router();
 
@@ -203,10 +204,22 @@ deploymentRouter.get('/:id/logs', async (req: AuthRequest, res, next) => {
       throw new AppError('Deployment not found', 404);
     }
 
+    let logs = deployment.logs || '';
+    if (!logs || deployment.status === 'BUILDING' || deployment.status === 'QUEUED') {
+      try {
+        const cached = await redis.lrange(`deployment:${deployment.id}:logs`, 0, -1);
+        if (cached && cached.length > 0) {
+          logs = cached.join('\n');
+        }
+      } catch {
+        // ignore redis error
+      }
+    }
+
     res.json({
       id: deployment.id,
       status: deployment.status,
-      logs: deployment.logs || '',
+      logs,
     });
   } catch (error) {
     next(error);

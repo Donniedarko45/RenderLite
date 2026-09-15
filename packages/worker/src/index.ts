@@ -165,8 +165,11 @@ function createLogCallback(
   jobLog: (msg: string) => void,
   deploymentId: string
 ) {
+  const logKey = `deployment:${deploymentId}:logs`;
   return (log: string) => {
     void jobLog(log);
+    void redis.rpush(logKey, log).catch(() => {});
+    void redis.expire(logKey, 86400).catch(() => {});
     void publishRealtimeEvent({
       type: 'deployment:log',
       deploymentId,

@@ -5,28 +5,32 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {
+  const token = localStorage.getItem('token');
+
   if (!socket) {
-    const token = localStorage.getItem('token');
-    
     socket = io(SOCKET_URL, {
-      auth: { token },
-      transports: ['websocket'],
+      auth: (cb) => {
+        cb({ token: localStorage.getItem('token') });
+      },
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
     });
 
     socket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('[Socket] Connected to server');
     });
 
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] Disconnected:', reason);
     });
 
     socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      console.error('[Socket] Connection error:', error.message);
     });
+  } else if (!socket.connected && token) {
+    socket.connect();
   }
 
   return socket;
@@ -52,6 +56,7 @@ export function subscribeToDeployment(
       onLog({ log: data.log, timestamp: data.timestamp });
     }
   };
+
   const statusHandler = (data: {
     deploymentId: string;
     status: string;
@@ -62,12 +67,21 @@ export function subscribeToDeployment(
     }
   };
 
-  socket.emit('subscribe:deployment', deploymentId);
+  const subscribe = () => {
+    socket.emit('subscribe:deployment', deploymentId);
+  };
+
+  if (socket.connected) {
+    subscribe();
+  }
+  socket.on('connect', subscribe);
+
   socket.on('deployment:log', logHandler);
   socket.on('deployment:status', statusHandler);
 
   return () => {
     socket.emit('unsubscribe:deployment', deploymentId);
+    socket.off('connect', subscribe);
     socket.off('deployment:log', logHandler);
     socket.off('deployment:status', statusHandler);
   };
